@@ -42,6 +42,7 @@ class MappedTransaction extends LongKeyedMapper[MappedTransaction] with IdPK wit
   object tFinishDate extends MappedDateTime(this)
 
   object description extends MappedString(this, 2000)
+  object sepaDescription extends MappedString(this, 140)
   object chargePolicy extends MappedString(this, 32)
   
   object counterpartyAccountHolder extends MappedString(this, 255)

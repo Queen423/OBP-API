@@ -39,6 +39,7 @@ import code.api.util.ErrorMessages._
 import com.openbankproject.commons.model._
 
 import scala.collection.immutable.List
+import scala.concurrent.Future
 
 object Moderation {
   type Moderated[A] = Option[A]

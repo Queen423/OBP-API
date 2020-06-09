@@ -36,6 +36,7 @@ import code.metadata.counterparties.{Counterparties, MappedCounterparty}
 import code.metadata.tags.Tags
 import code.model.dataAccess.{AuthUser, BankAccountCreation}
 import code.model.{toUserExtended, _}
+import code.transaction.MappedTransaction
 import code.transactionChallenge.MappedExpectedChallengeAnswer
 import code.transactionrequests.MappedTransactionRequestProvider
 import code.transactionrequests.TransactionRequests.TransactionChallengeTypes._
@@ -54,7 +55,7 @@ import com.openbankproject.commons.model.enums._
 import com.openbankproject.commons.util.ApiVersion
 import deletion.{DeleteAccountCascade, DeleteProductCascade, DeleteTransactionCascade}
 import net.liftweb.common.{Box, Failure, Full}
-import net.liftweb.http.Req
+import net.liftweb.http.{Req, UnauthorizedDigestResponse}
 import net.liftweb.http.rest.RestHelper
 import net.liftweb.json.JsonAST.JValue
 import net.liftweb.json.JsonDSL._
@@ -4117,6 +4118,75 @@ trait APIMethods400 {
 
           } yield {
             (JSONFactory220.createCounterpartyWithMetadataJSON(counterparty,counterpartyMetadata), HttpCode.`201`(callContext))
+          }
+      }
+    }
+
+    staticResourceDocs += ResourceDoc(
+      postCoreSepaSctTransaction,
+      implementedInApiVersion,
+      nameOf(postCoreSepaSctTransaction),
+      "POST",
+      "/core/banks/BANK_ID/sct/transfer",
+      "Create a SEPA Credit Transfer transaction",
+      s"""Create a SEPA Credit Transfer transaction.
+         |
+         |${authenticationRequiredMessage(true)}
+         |
+         |""".stripMargin,
+      postCoreSepaSctTransactionJson,
+      transactionsJSON,
+      List(
+        UserNotLoggedIn,
+        InvalidAccountIdFormat,
+        InvalidBankIdFormat,
+        BankNotFound,
+        AccountNotFound,
+        InvalidJsonFormat,
+        InsufficientAuthorisationToCreateTransactionRequest,
+        UnknownError
+      ),
+      Catalogs(notCore, notPSD2, notOBWG),
+      Nil,
+      Some(List(canCreateAnyTransactionRequest)))
+
+
+    lazy val postCoreSepaSctTransaction: OBPEndpoint = {
+      case "core" :: "banks" :: BankId(bankId) :: "sct" :: "transfer" :: Nil JsonPost json -> _ => {
+        cc =>
+          for {
+            (Full(u), _) <- authenticatedAccess(cc)
+
+            postJson <- NewStyle.function.tryons(InvalidJsonFormat, 400,  cc.callContext) {
+              json.extract[PostCoreSepaSctTransactionJson]
+            }
+
+            _ <- Helper.booleanToFuture(InvalidBankIdFormat) {
+              isValidID(bankId.value)
+            }
+
+            _ <- Helper.booleanToFuture(InvalidAccountIdFormat) {
+              isValidID(postJson.from_account)
+            }
+
+            _ <- Helper.booleanToFuture(s"$InvalidCurrency. The `currency` field of `amount` can only be `EUR`") {
+              postJson.amount.currency == "EUR"
+            }
+
+            _ <- Helper.booleanToFuture(s"$InvalidValueLength. The maximum length of `description` field is ${MappedTransaction.sepaDescription.maxLen}") {
+              postJson.description.length <= MappedTransaction.sepaDescription.maxLen
+            }
+
+
+
+            transaction <- ModeratedTransactionCore(
+              id = TransactionId()
+
+              )
+            )
+
+          } yield {
+            (JSONFactory300.createCoreTransactionJSON(transaction), HttpCode.`200`(cc.callContext))
           }
       }
     }

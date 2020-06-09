@@ -291,6 +291,14 @@ case class UserLockStatusJson(
                                type_of_lock: String,
                                last_lock_date : Date
                              )
+
+case class PostCoreSepaSctTransactionJson(
+                                           from_account: String,
+                                           to_counterparty: String,
+                                           amount: AmountOfMoneyJsonV121,
+                                           description: String
+                                         )
+
 object JSONFactory400 {
   def createBankJSON400(bank: Bank): BankJson400 = {
     val obp = BankRoutingJsonV121("OBP", bank.bankId.value)
