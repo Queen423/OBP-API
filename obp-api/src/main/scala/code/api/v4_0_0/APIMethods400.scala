@@ -1245,8 +1245,7 @@ trait APIMethods400 {
               initialBalanceAsNumber,
               postedOrLoggedInUser.name,
               createAccountJson.branch_id,
-              createAccountJson.account_routing.scheme,
-              createAccountJson.account_routing.address,
+              createAccountJson.account_routings.map(r => AccountRouting(r.address, r.scheme)),
               callContext
             )
             accountId = bankAccount.accountId

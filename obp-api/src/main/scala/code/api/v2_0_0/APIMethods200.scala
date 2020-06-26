@@ -1159,8 +1159,7 @@ trait APIMethods200 {
               accountLabel, currency, initialBalanceAsNumber, 
               postedOrLoggedInUser.name,
               "", //added new field in V220
-              "", //added new field in V220
-              "" //added new field in V220
+              List.empty
             )
           } yield {
             BankAccountCreation.setAsOwner(bankId, accountId, postedOrLoggedInUser)

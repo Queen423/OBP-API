@@ -16,7 +16,6 @@ import code.api.util._
 import code.api.v1_2_1.{JSONFactory, RateLimiting}
 import code.api.v2_0_0.CreateMeetingJson
 import code.api.v2_1_0._
-import code.api.v2_2_0.{CreateAccountJSONV220, JSONFactory220}
 import code.api.v3_0_0.JSONFactory300
 import code.api.v3_0_0.JSONFactory300.createAdapterInfoJson
 import code.api.v3_1_0.JSONFactory310._
@@ -33,7 +32,7 @@ import code.metrics.APIMetrics
 import code.model._
 import code.model.dataAccess.{AuthUser, BankAccountCreation}
 import code.ratelimiting.RateLimitingDI
-import code.userlocks.{UserLocks, UserLocksProvider}
+import code.userlocks.UserLocksProvider
 import code.users.Users
 import code.util.Helper
 import code.views.Views
@@ -42,6 +41,7 @@ import code.webuiprops.{MappedWebUiPropsProvider, WebUiPropsCommons}
 import com.github.dwickern.macros.NameOf.nameOf
 import com.nexmo.client.NexmoClient
 import com.nexmo.client.sms.messages.TextMessage
+import com.openbankproject.commons.ExecutionContext.Implicits.global
 import com.openbankproject.commons.model.enums.{AccountAttributeType, CardAttributeType, ProductAttributeType, StrongCustomerAuthentication}
 import com.openbankproject.commons.model.{CreditLimit, Product, _}
 import com.openbankproject.commons.util.{ApiVersion, ReflectUtils}
@@ -57,11 +57,8 @@ import org.apache.commons.lang3.{StringUtils, Validate}
 
 import scala.collection.immutable.{List, Nil}
 import scala.collection.mutable.ArrayBuffer
-import com.openbankproject.commons.ExecutionContext.Implicits.global
-
 import scala.concurrent.Future
 import scala.util.Random
-import scala.reflect.runtime.universe.MethodSymbol
 
 trait APIMethods310 {
   self: RestHelper =>
@@ -2458,17 +2455,16 @@ trait APIMethods310 {
                 for{
                   accountId <- Future{AccountId(UUID.randomUUID().toString)}
                   (_, callContext) <- NewStyle.function.createBankAccount(
-                                                                                 bankId, 
-                                                                                 accountId, 
-                                                                                 accountApplication.productCode.value,
-                                                                                 "", 
-                                                                                 "EUR",
-                                                                                 BigDecimal("0"), 
-                                                                                 u.name,
-                                                                                 "", 
-                                                                                 "", 
-                                                                                 "",
-                                                                                 callContext)
+                    bankId,
+                    accountId,
+                    accountApplication.productCode.value,
+                    "",
+                    "EUR",
+                    BigDecimal("0"),
+                    u.name,
+                    "",
+                    List.empty,
+                    callContext)
                 }yield {
                   BankAccountCreation.setAsOwner(bankId, accountId, u)
                 }
@@ -4817,8 +4813,7 @@ trait APIMethods310 {
               consentJson.`type`,
               consentJson.label,
               consentJson.branch_id,
-              consentJson.account_routing.scheme,
-              consentJson.account_routing.address,
+              consentJson.account_routings.map(r => AccountRouting(r.scheme, r.address)),
               callContext
             )
           } yield {
@@ -5468,8 +5463,7 @@ trait APIMethods310 {
               initialBalanceAsNumber,
               postedOrLoggedInUser.name,
               createAccountJson.branch_id,
-              createAccountJson.account_routing.scheme,
-              createAccountJson.account_routing.address,
+              createAccountJson.account_routings.map(r => AccountRouting(r.address, r.scheme)),
               callContext
             )
             (productAttributes, callContext) <- NewStyle.function.getProductAttributesByBankAndCode(bankId, ProductCode(accountType), callContext)

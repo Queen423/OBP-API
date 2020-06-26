@@ -3,7 +3,7 @@ package code.bankconnectors
 import java.util.Date
 import java.util.UUID.randomUUID
 
-import scala.concurrent.duration._
+import _root_.akka.http.scaladsl.model.HttpMethod
 import code.DynamicData.DynamicDataProvider
 import code.DynamicEndpoint.{DynamicEndpointProvider, DynamicEndpointT}
 import code.accountapplication.AccountApplicationX
@@ -17,7 +17,7 @@ import code.api.util.ApiRole.canCreateAnyTransactionRequest
 import code.api.util.ErrorMessages._
 import code.api.util._
 import code.api.v1_4_0.JSONFactory1_4_0.TransactionRequestAccountJsonV140
-import code.api.v2_1_0.{CounterpartyIdJson, IbanJson, TransactionRequestBodyCounterpartyJSON, TransactionRequestBodyFreeFormJSON, TransactionRequestBodySEPAJSON, TransactionRequestBodySandBoxTanJSON}
+import code.api.v2_1_0._
 import code.atms.Atms.Atm
 import code.atms.MappedAtm
 import code.branches.Branches.Branch
@@ -27,13 +27,10 @@ import code.cards.MappedPhysicalCard
 import code.context.{UserAuthContextProvider, UserAuthContextUpdateProvider}
 import code.customer._
 import code.customeraddress.CustomerAddressX
-import code.customerattribute.{CustomerAttributeX, MappedCustomerAttribute}
+import code.customerattribute.CustomerAttributeX
 import code.directdebit.DirectDebits
-import com.openbankproject.commons.model.DirectDebitTrait
-import code.dynamicEntity.{DynamicEntityProvider, DynamicEntityT}
 import code.fx.fx.TTL
 import code.fx.{MappedFXRate, fx}
-import com.openbankproject.commons.model.FXRate
 import code.kycchecks.KycChecks
 import code.kycdocuments.KycDocuments
 import code.kycmedias.KycMedias
@@ -58,9 +55,8 @@ import code.taxresidence.TaxResidenceX
 import code.transaction.MappedTransaction
 import code.transactionChallenge.ExpectedChallengeAnswer
 import code.transactionattribute.TransactionAttributeX
-import code.transactionrequests.TransactionRequests.TransactionRequestTypes.{ACCOUNT, ACCOUNT_OTP, COUNTERPARTY, FREE_FORM, REFUND, SANDBOX_TAN, SEPA, SEPA_CREDIT_TRANSFERS}
+import code.transactionrequests.TransactionRequests.TransactionRequestTypes._
 import code.transactionrequests.TransactionRequests.{TransactionChallengeTypes, TransactionRequestTypes}
-import com.openbankproject.commons.model.enums.TransactionRequestStatus
 import code.transactionrequests._
 import code.users.Users
 import code.util.Helper
@@ -69,10 +65,12 @@ import code.views.Views
 import com.google.common.cache.CacheBuilder
 import com.nexmo.client.NexmoClient
 import com.nexmo.client.sms.messages.TextMessage
+import com.openbankproject.commons.ExecutionContext.Implicits.global
+import com.openbankproject.commons.dto.ProductCollectionItemsTree
 import com.openbankproject.commons.model.enums.DynamicEntityOperation._
 import com.openbankproject.commons.model.enums.StrongCustomerAuthentication.SCA
-import com.openbankproject.commons.model.enums._
-import com.openbankproject.commons.model.{AccountApplication, AccountAttribute, Product, ProductAttribute, ProductCollectionItem, TaxResidence, _}
+import com.openbankproject.commons.model.enums.{TransactionRequestStatus, _}
+import com.openbankproject.commons.model.{AccountApplication, AccountAttribute, DirectDebitTrait, FXRate, Product, ProductAttribute, ProductCollectionItem, TaxResidence, _}
 import com.tesobe.CacheKeyFromArguments
 import com.tesobe.model.UpdateBankAccount
 import net.liftweb.common._
@@ -87,14 +85,11 @@ import scalacache.ScalaCache
 import scalacache.guava.GuavaCache
 
 import scala.collection.immutable.{List, Nil}
-import com.openbankproject.commons.ExecutionContext.Implicits.global
-
 import scala.concurrent._
+import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.math.{BigDecimal, BigInt}
 import scala.util.Random
-import _root_.akka.http.scaladsl.model.HttpMethod
-import com.openbankproject.commons.dto.ProductCollectionItemsTree
 
 object LocalMappedConnector extends Connector with MdcLoggable {
 
@@ -1313,7 +1308,8 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       accountNumber, accountType,
       accountLabel, currency,
       0L, accountHolderName,
-      "", "", "" //added field in V220
+      "",
+      List.empty
     )
 
     Full((bank, account))
@@ -1325,10 +1321,42 @@ object LocalMappedConnector extends Connector with MdcLoggable {
                                   accountType: String,
                                   accountLabel: String,
                                   branchId: String,
-                                  accountRoutingScheme: String,
-                                  accountRoutingAddress: String,
+                                  accountRoutings: List[AccountRouting],
                                   callContext: Option[CallContext]
                                 ): OBPReturnType[Box[BankAccount]] = Future {
+
+    val oldAccountRoutings = BankAccountRouting.findAll(By(BankAccountRouting.BankId, bankId.value),
+      By(BankAccountRouting.AccountId, accountId.value))
+      .map(_.accountRouting)
+
+    // Add or update new routing schemes
+    accountRoutings.map(accountRouting =>
+      oldAccountRoutings.find(_.scheme == accountRouting.scheme) match {
+        case Some(accountRouting) =>
+          BankAccountRouting
+            .find(By(BankAccountRouting.AccountId, accountId.value),
+              By(BankAccountRouting.AccountRoutingScheme, accountRouting.scheme))
+            .map(_.AccountRoutingAddress(accountRouting.address).saveMe())
+        case None =>
+          BankAccountRouting
+            .AccountId(accountId.value)
+            .AccountRoutingScheme(accountRouting.scheme)
+            .AccountRoutingAddress(accountRouting.address)
+            .saveMe()
+      }
+    )
+
+    // Delete non-present routing schemes
+    oldAccountRoutings.foreach(accountRouting =>
+      accountRoutings.find(_.scheme == accountRouting.scheme)
+        .getOrElse(
+          BankAccountRouting
+            .find(By(BankAccountRouting.AccountId, accountId.value),
+              By(BankAccountRouting.AccountRoutingScheme, accountRouting.scheme))
+            .map(_.delete_!)
+        )
+    )
+
     (for {
       (account, callContext) <- LocalMappedConnector.getBankAccountCommon(bankId, accountId, callContext)
     } yield {
@@ -1336,8 +1364,6 @@ object LocalMappedConnector extends Connector with MdcLoggable {
         .kind(accountType)
         .accountLabel(accountLabel)
         .mBranchId(branchId)
-        .mAccountRoutingScheme(accountRoutingScheme)
-        .mAccountRoutingAddress(accountRoutingAddress)
         .saveMe
     }, callContext)
   }
@@ -1401,8 +1427,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
                                initialBalance: BigDecimal,
                                accountHolderName: String,
                                branchId: String,
-                               accountRoutingScheme: String,
-                               accountRoutingAddress: String,
+                               accountRoutings: List[AccountRouting],
                                callContext: Option[CallContext]
                              ): OBPReturnType[Box[BankAccount]] = Future {
     val accountId = AccountId(APIUtil.generateUUID())
@@ -1429,8 +1454,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       initialBalance,
       accountHolderName,
       branchId: String, //added field in V220
-      accountRoutingScheme, //added field in V220
-      accountRoutingAddress //added field in V220
+      accountRoutings
     ), callContext)
   }
 
@@ -1444,8 +1468,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
                                   initialBalance: BigDecimal,
                                   accountHolderName: String,
                                   branchId: String,
-                                  accountRoutingScheme: String,
-                                  accountRoutingAddress: String,
+                                  accountRoutings: List[AccountRouting],
                                   callContext: Option[CallContext]
                                 ): OBPReturnType[Box[BankAccount]] = Future {
     (Connector.connector.vend.createBankAccountLegacy(bankId: BankId,
@@ -1456,8 +1479,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       initialBalance: BigDecimal,
       accountHolderName: String,
       branchId: String,
-      accountRoutingScheme: String,
-      accountRoutingAddress: String), callContext)
+      accountRoutings: List[AccountRouting]), callContext)
   }
 
   //creates a bank account for an existing bank, with the appropriate values set. Can fail if the bank doesn't exist
@@ -1471,8 +1493,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
                                          initialBalance: BigDecimal,
                                          accountHolderName: String,
                                          branchId: String,
-                                         accountRoutingScheme: String,
-                                         accountRoutingAddress: String
+                                         accountRoutings: List[AccountRouting]
                                        ): Box[BankAccount] = {
 
     for {
@@ -1490,8 +1511,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
         balanceInSmallestCurrencyUnits,
         accountHolderName,
         branchId,
-        accountRoutingScheme,
-        accountRoutingAddress
+        accountRoutings
       )
     }
 
@@ -1508,15 +1528,14 @@ object LocalMappedConnector extends Connector with MdcLoggable {
                                           balanceInSmallestCurrencyUnits: Long,
                                           accountHolderName: String,
                                           branchId: String,
-                                          accountRoutingScheme: String,
-                                          accountRoutingAddress: String
+                                          accountRoutings: List[AccountRouting],
                                         ): BankAccount = {
     getBankAccountOld(bankId, accountId) match {
       case Full(a) =>
         logger.debug(s"account with id $accountId at bank with id $bankId already exists. No need to create a new one.")
         a
       case _ =>
-        MappedBankAccount.create
+        val bankAccount = MappedBankAccount.create
           .bank(bankId.value)
           .theAccountId(accountId.value)
           .accountNumber(accountNumber)
@@ -1526,9 +1545,15 @@ object LocalMappedConnector extends Connector with MdcLoggable {
           .accountBalance(balanceInSmallestCurrencyUnits)
           .holder(accountHolderName)
           .mBranchId(branchId)
-          .mAccountRoutingScheme(accountRoutingScheme)
-          .mAccountRoutingAddress(accountRoutingAddress)
           .saveMe()
+        accountRoutings.map(accountRouting =>
+          BankAccountRouting.create
+            .AccountId(bankAccount.accountId.value)
+            .AccountRoutingScheme(accountRouting.scheme)
+            .AccountRoutingAddress(accountRouting.address)
+            .saveMe()
+        )
+        bankAccount
     }
   }
 
@@ -4023,8 +4048,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
                                         initialBalance: BigDecimal,
                                         accountHolderName: String,
                                         branchId: String,
-                                        accountRoutingScheme: String,
-                                        accountRoutingAddress: String
+                                        accountRoutings: List[AccountRouting]
                                       ): Box[BankAccount] = {
     val uniqueAccountNumber = {
       def exists(number: String) = Connector.connector.vend.accountExists(bankId, number).openOrThrowException(attemptedToOpenAnEmptyBox)
@@ -4050,8 +4074,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       initialBalance,
       accountHolderName,
       branchId: String, //added field in V220
-      accountRoutingScheme, //added field in V220
-      accountRoutingAddress //added field in V220
+      List.empty
     )
 
   }

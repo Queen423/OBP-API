@@ -1098,8 +1098,7 @@ object NewStyle {
       initialBalance: BigDecimal,
       accountHolderName: String,
       branchId: String,
-      accountRoutingScheme: String,
-      accountRoutingAddress: String, 
+      accountRoutings: List[AccountRouting],
       callContext: Option[CallContext]
     ): OBPReturnType[BankAccount] = 
       Connector.connector.vend.createBankAccount(
@@ -1111,8 +1110,7 @@ object NewStyle {
         initialBalance: BigDecimal,
         accountHolderName: String,
         branchId: String,
-        accountRoutingScheme: String,
-        accountRoutingAddress: String,
+        accountRoutings: List[AccountRouting],
         callContext
       ) map {
         i => (unboxFullOrFail(i._1, callContext, UnknownError, 400), i._2)
@@ -1126,8 +1124,7 @@ object NewStyle {
       initialBalance: BigDecimal,
       accountHolderName: String,
       branchId: String,
-      accountRoutingScheme: String,
-      accountRoutingAddress: String,
+      accountRoutings: List[AccountRouting],
       callContext: Option[CallContext]
     ): OBPReturnType[BankAccount] =
       Connector.connector.vend.addBankAccount(
@@ -1138,8 +1135,7 @@ object NewStyle {
         initialBalance: BigDecimal,
         accountHolderName: String,
         branchId: String,
-        accountRoutingScheme: String,
-        accountRoutingAddress: String,
+        accountRoutings: List[AccountRouting],
         callContext: Option[CallContext]
       ) map {
         i => (unboxFullOrFail(i._1, callContext, UnknownError, 400), i._2)
@@ -1151,8 +1147,7 @@ object NewStyle {
                            accountType: String,
                            accountLabel: String,
                            branchId: String,
-                           accountRoutingScheme: String,
-                           accountRoutingAddress: String,
+                           accountRoutings: List[AccountRouting],
                            callContext: Option[CallContext]
                          ): OBPReturnType[BankAccount] =
       Connector.connector.vend.updateBankAccount(
@@ -1161,8 +1156,7 @@ object NewStyle {
         accountType: String,
         accountLabel: String,
         branchId: String,
-        accountRoutingScheme: String,
-        accountRoutingAddress: String,
+        accountRoutings,
         callContext
       ) map {
         i => (unboxFullOrFail(i._1, callContext, UnknownError, 400), i._2)

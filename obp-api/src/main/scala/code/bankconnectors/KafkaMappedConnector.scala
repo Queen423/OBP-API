@@ -767,8 +767,7 @@ object KafkaMappedConnector extends Connector with KafkaHelper with MdcLoggable 
     initialBalance: BigDecimal,
     accountHolderName: String,
     branchId: String,
-    accountRoutingScheme: String,
-    accountRoutingAddress: String
+    accountRoutings: List[AccountRouting]
   ): Box[BankAccount] = {
 
     for {

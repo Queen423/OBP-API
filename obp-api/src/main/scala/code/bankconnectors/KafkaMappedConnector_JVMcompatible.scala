@@ -938,8 +938,7 @@ object KafkaMappedConnector_JVMcompatible extends Connector with KafkaHelper wit
     initialBalance: BigDecimal,
     accountHolderName: String,
     branchId: String,
-    accountRoutingScheme: String,
-    accountRoutingAddress: String
+    accountRoutings: List[AccountRouting]
   ): Box[BankAccount] = {
 
     for {
