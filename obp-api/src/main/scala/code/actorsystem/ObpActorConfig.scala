@@ -15,10 +15,10 @@ object ObpActorConfig {
   val akka_loglevel = APIUtil.getPropsValue("remotedata.loglevel").openOr("INFO")
 
   val commonConf = 
-  """
+  s"""
   akka {
     loggers = ["akka.event.slf4j.Slf4jLogger"]
-    loglevel =  """ + akka_loglevel + """
+    loglevel =  $akka_loglevel
     actor {
       provider = "akka.remote.RemoteActorRefProvider"
       allow-java-serialization = off

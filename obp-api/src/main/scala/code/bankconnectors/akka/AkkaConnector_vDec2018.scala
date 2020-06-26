@@ -12,12 +12,16 @@ import code.api.util.ExampleValue._
 import code.api.util._
 import code.bankconnectors._
 import code.bankconnectors.akka.actor.{AkkaConnectorActorInit, AkkaConnectorHelperActor}
+import code.customer.internalMapping.MappedCustomerIdMappingProvider
+import code.model.dataAccess.internalMapping.MappedAccountIdMappingProvider
+import com.esotericsoftware.minlog.Log
 import com.openbankproject.commons.ExecutionContext.Implicits.global
 import com.openbankproject.commons.dto._
 import com.openbankproject.commons.model._
 import com.openbankproject.commons.model.enums.{AccountAttributeType, CardAttributeType, CustomerAttributeType, ProductAttributeType, StrongCustomerAuthentication, TransactionAttributeType}
+import com.openbankproject.commons.util.ReflectUtils
 import com.sksamuel.avro4s.SchemaFor
-import net.liftweb.common.{Box, Full}
+import net.liftweb.common.{Box, EmptyBox, Full}
 import net.liftweb.json.parse
 
 import scala.collection.immutable.{List, Nil}
@@ -1414,9 +1418,11 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
   )
 
   override def makePaymentv210(fromAccount: BankAccount, toAccount: BankAccount, transactionRequestCommonBody: TransactionRequestCommonBodyJSON, amount: BigDecimal, description: String, transactionRequestType: TransactionRequestType, chargePolicy: String, callContext: Option[CallContext]): OBPReturnType[Box[TransactionId]] = {
-        import com.openbankproject.commons.dto.{OutBoundMakePaymentv210 => OutBound, InBoundMakePaymentv210 => InBound}  
+        import com.openbankproject.commons.dto.{OutBoundMakePaymentv210 => OutBound, InBoundMakePaymentv210 => InBound}
         val req = OutBound(callContext.map(_.toOutboundAdapterCallContext).orNull, fromAccount, toAccount, transactionRequestCommonBody, amount, description, transactionRequestType, chargePolicy)
-        val response: Future[Box[InBound]] = (southSideActor ? req).mapTo[InBound].recoverWith(recoverFunction).map(Box !! _) 
+        println(req)
+        println(convertToReference(req))
+        val response: Future[Box[InBound]] = (southSideActor ? req).mapTo[InBound].recoverWith(recoverFunction).map(Box !! _)
         response.map(convertToTuple[TransactionId](callContext))        
   }
           
@@ -5432,5 +5438,86 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
   }
           
 // ---------- created on 2020-06-17T14:19:04Z
-//---------------- dynamic end ---------------------please don't modify this line 
+//---------------- dynamic end ---------------------please don't modify this line
+  import scala.language.postfixOps
+  import scala.reflect.runtime.universe._
+
+  /**
+   * helper function to convert customerId and accountId in a given instance
+   * @param obj
+   * @param customerIdConverter customerId converter, to or from customerReference
+   * @param accountIdConverter accountId converter, to or from accountReference
+   * @tparam T type of instance
+   * @return modified instance
+   */
+  private def convertId[T](obj: T, customerIdConverter: String=> String, accountIdConverter: String=> String): T = {
+    //1st: We must not convert when connector == mapped. this will ignore the implicitly_convert_ids props.
+    //2rd: if connector != mapped, we still need the `implicitly_convert_ids == true`
+
+    def isCustomerId(fieldName: String, fieldType: Type, fieldValue: Any, ownerType: Type) = {
+      ownerType =:= typeOf[CustomerId] ||
+        (fieldName.equalsIgnoreCase("customerId") && fieldType =:= typeOf[String]) ||
+        (ownerType <:< typeOf[Customer] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])
+    }
+
+    def isAccountId(fieldName: String, fieldType: Type, fieldValue: Any, ownerType: Type) = {
+      println((fieldName, fieldType, fieldValue, ownerType))
+      (ownerType <:< typeOf[AccountId] && fieldName.equalsIgnoreCase("value") && fieldType =:= typeOf[String])||
+      (ownerType <:< typeOf[AccountBasic] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])||
+      (ownerType <:< typeOf[CoreAccount] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])||
+      (ownerType <:< typeOf[AccountBalance] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])||
+      (ownerType <:< typeOf[AccountHeld] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])
+    }
+
+    if(APIUtil.getPropsValue("connector","mapped") != "mapped" && APIUtil.getPropsAsBoolValue("implicitly_convert_ids", defaultValue = false)){
+      println("OK")
+      ReflectUtils.resetNestedFields(obj){
+        case (fieldName, fieldType, fieldValue: String, ownerType) if isCustomerId(fieldName, fieldType, fieldValue, ownerType) => customerIdConverter(fieldValue)
+        case (fieldName, fieldType, fieldValue: String, ownerType) if isAccountId(fieldName, fieldType, fieldValue, ownerType) =>
+          println("AAAAAAAAAA")
+          accountIdConverter(fieldValue)
+      }
+      obj
+    } else
+      obj
+  }
+
+  /**
+   * convert given instance nested CustomerId to customerReference, AccountId to accountReference
+   * @param obj
+   * @tparam T type of instance
+   * @return modified instance
+   */
+  def convertToReference[T](obj: T): T = {
+    import code.api.util.ErrorMessages.{CustomerNotFoundByCustomerId, InvalidAccountIdFormat}
+    def customerIdConverter(customerId: String): String = MappedCustomerIdMappingProvider
+      .getCustomerPlainTextReference(CustomerId(customerId))
+      .openOrThrowException(s"$CustomerNotFoundByCustomerId the invalid customerId is $customerId")
+    def accountIdConverter(accountId: String): String = MappedAccountIdMappingProvider
+      .getAccountPlainTextReference(AccountId(accountId))
+      .openOrThrowException(s"$InvalidAccountIdFormat the invalid accountId is $accountId")
+    convertId[T](obj, customerIdConverter, accountIdConverter)
+  }
+
+  /**
+   * convert given instance nested customerReference to CustomerId, accountReference to AccountId
+   * @param obj
+   * @tparam T type of instance
+   * @return modified instance
+   */
+  def convertToId[T](obj: T): T = {
+    import code.api.util.ErrorMessages.{CustomerNotFoundByCustomerId, InvalidAccountIdFormat}
+    def customerIdConverter(customerReference: String): String = MappedCustomerIdMappingProvider
+      .getOrCreateCustomerId(customerReference)
+      .map(_.value)
+      .openOrThrowException(s"$CustomerNotFoundByCustomerId the invalid customerReference is $customerReference")
+    def accountIdConverter(accountReference: String): String = MappedAccountIdMappingProvider
+      .getOrCreateAccountId(accountReference)
+      .map(_.value).openOrThrowException(s"$InvalidAccountIdFormat the invalid accountReference is $accountReference")
+    if(obj.isInstanceOf[EmptyBox]) {
+      obj
+    } else {
+      convertId[T](obj, customerIdConverter, accountIdConverter)
+    }
+  }
 }
