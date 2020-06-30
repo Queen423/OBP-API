@@ -133,6 +133,13 @@ object MapperCounterparties extends Counterparties with MdcLoggable {
     )
   }
 
+  def getCounterpartyByIbanAndAccountId(iban : String, accountId: AccountId) = {
+    MappedCounterparty.find(
+      By(MappedCounterparty.mOtherAccountSecondaryRoutingAddress, iban),
+      By(MappedCounterparty.mThisAccountId, accountId.value)
+    )
+  }
+
   override def getCounterparties(thisBankId: BankId, thisAccountId: AccountId, viewId: ViewId): Box[List[CounterpartyTrait]] = {
     Full(MappedCounterparty.findAll(By(MappedCounterparty.mThisAccountId, thisAccountId.value),
       By(MappedCounterparty.mThisBankId, thisBankId.value),

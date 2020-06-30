@@ -793,6 +793,10 @@ object LocalMappedConnector extends Connector with MdcLoggable {
     Future(Counterparties.counterparties.vend.getCounterpartyByIban(iban), callContext)
   }
 
+  override def getCounterpartyByIbanAndAccountId(iban: String, accountId: AccountId, callContext: Option[CallContext]) = {
+    Future(Counterparties.counterparties.vend.getCounterpartyByIbanAndAccountId(iban, accountId), callContext)
+  }
+
 
   override def getPhysicalCardsForUser(user: User): Box[List[PhysicalCard]] = {
     val list = code.cards.PhysicalCard.physicalCardProvider.vend.getPhysicalCards(user)

@@ -842,7 +842,7 @@ trait APIMethods400 {
                     json.extract[TransactionRequestBodySEPAJsonV400]
                   }
                   toIban = transDetailsSEPAJson.to.iban
-                  (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIban(toIban, cc.callContext)
+                  (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toIban, fromAccount.accountId, cc.callContext)
                   toAccount <- NewStyle.function.getBankAccountFromCounterparty(toCounterparty, true, callContext)
                   _ <- Helper.booleanToFuture(s"$CounterpartyBeneficiaryPermit") {
                     toCounterparty.isBeneficiary
@@ -899,12 +899,12 @@ trait APIMethods400 {
             val challenges : List[ChallengeJson] = if(APIUtil.isSandboxMode){
                MappedExpectedChallengeAnswer
                 .findAll(By(MappedExpectedChallengeAnswer.mTransactionRequestId, createdTransactionRequest.id.value))
-                .map(mappedExpectedChallengeAnswer => 
+                .map(mappedExpectedChallengeAnswer =>
                   ChallengeJson(mappedExpectedChallengeAnswer.challengeId,mappedExpectedChallengeAnswer.transactionRequestId,mappedExpectedChallengeAnswer.expectedUserId) )
             } else {
-              if(!("COMPLETED").equals(createdTransactionRequest.status)) 
+              if(!("COMPLETED").equals(createdTransactionRequest.status))
                 List(ChallengeJson(createdTransactionRequest.challenge.id, createdTransactionRequest.id.value, u.userId))
-              else 
+              else
                 null
             }
             (JSONFactory400.createTransactionRequestWithChargeJSON(createdTransactionRequest, challenges), HttpCode.`201`(callContext))
@@ -1000,7 +1000,7 @@ trait APIMethods400 {
             _ <- Helper.booleanToFuture(s"${TransactionRequestTypeHasChanged} It should be :'$existingTransactionRequestType', but current value (${transactionRequestType.value}) ") {
               existingTransactionRequestType.equals(transactionRequestType.value)
             }
-            
+
             //Check the allowed attempts, Note: not supported yet, the default value is 3
             _ <- Helper.booleanToFuture(s"${AllowedAttemptsUsedUp}") {
               existingTransactionRequest.challenge.allowed_attempts > 0
@@ -1032,7 +1032,7 @@ trait APIMethods400 {
               challengeAnswerIsValidated
             }
 
-            
+
             //TODO, this is a temporary solution, we only checked single challenge Id for remote connectors. here is only for the localMapped Connector logic
             _ <- if (APIUtil.isDataFromOBPSide("validateChallengeAnswer")){
               for{
@@ -1053,8 +1053,8 @@ trait APIMethods400 {
               }
             } else{
             Future{true}
-          } 
-            
+          }
+
           // All Good, proceed with the Transaction creation...
           (transactionRequest, callContext) <- TransactionRequestTypes.withName(transactionRequestType.value) match {
             case TRANSFER_TO_PHONE | TRANSFER_TO_ATM | TRANSFER_TO_ACCOUNT =>
