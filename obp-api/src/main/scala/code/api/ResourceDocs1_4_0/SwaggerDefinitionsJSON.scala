@@ -3606,7 +3606,10 @@ object SwaggerDefinitionsJSON {
   val historicalTransactionAccountJsonV310 = HistoricalTransactionAccountJsonV310(
     bank_id = Some(bankIdExample.value),
     account_id = Some(accountIdExample.value),
-    counterparty_id = Some(counterpartyIdExample.value)
+    counterparty_id = Some(counterpartyIdExample.value),
+    account_iban = Some(ibanExample.value),
+    counterparty_iban = Some(ibanExample.value),
+    bank_bic = Some(bankSwiftBicExample.value)
   )
   
   val postHistoricalTransactionJson = PostHistoricalTransactionJson(
