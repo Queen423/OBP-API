@@ -746,6 +746,9 @@ case class HistoricalTransactionAccountJsonV310(
   bank_id: Option[String],
   account_id : Option[String],
   counterparty_id : Option[String],
+  account_iban: Option[String] = None,
+  counterparty_iban: Option[String] = None,
+  bank_bic: Option[String] = None,
 )
 
 case class PostHistoricalTransactionJson(

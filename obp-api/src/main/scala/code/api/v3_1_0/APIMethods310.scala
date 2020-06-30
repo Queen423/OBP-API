@@ -5660,6 +5660,15 @@ trait APIMethods310 {
               }yield{
                 (fromAccount, callContext)
               }
+            } else if (fromAccountPost.account_iban.isDefined && fromAccountPost.counterparty_iban.isEmpty) {
+            for {
+              (fromAccount, callContext) <- NewStyle.function.getBankAccountByIban(iban = fromAccountPost.account_iban.get, callContext)
+            } yield (fromAccount, callContext)
+            } else if (fromAccountPost.counterparty_iban.isDefined && fromAccountPost.account_iban.isEmpty) {
+              for {
+                (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIban(iban = fromAccountPost.counterparty_iban.get, callContext)
+                fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, false, callContext)
+              } yield (fromAccount, callContext)
             } else {
               throw new RuntimeException(s"$InvalidJsonFormat from object should only contain bank_id and account_id or counterparty_id in the post json body.")
             }
@@ -5680,6 +5689,15 @@ trait APIMethods310 {
               }yield{
                 (toAccount, callContext)
               }
+            } else if (toAccountPost.account_iban.isDefined && toAccountPost.counterparty_iban.isEmpty) {
+              for {
+                (toAccount, callContext) <- NewStyle.function.getBankAccountByIban(iban = toAccountPost.account_iban.get, callContext)
+              } yield (toAccount, callContext)
+            } else if (toAccountPost.counterparty_iban.isDefined && toAccountPost.account_iban.isEmpty) {
+              for {
+                (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIban(iban = toAccountPost.counterparty_iban.get, callContext)
+                toAccount <- NewStyle.function.toBankAccount(fromCounterparty, true, callContext)
+              } yield (toAccount, callContext)
             } else {
               throw new RuntimeException(s"$InvalidJsonFormat to object should only contain bank_id and account_id or counterparty_id in the post json body.")
             }

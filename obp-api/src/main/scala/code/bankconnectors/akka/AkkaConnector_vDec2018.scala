@@ -13,7 +13,7 @@ import code.api.util._
 import code.bankconnectors._
 import code.bankconnectors.akka.actor.{AkkaConnectorActorInit, AkkaConnectorHelperActor}
 import code.customer.internalMapping.MappedCustomerIdMappingProvider
-import code.model.dataAccess.internalMapping.MappedAccountIdMappingProvider
+import code.model.dataAccess.internalMapping.{MappedAccountIdMappingProvider, MappedBankIdMappingProvider}
 import com.esotericsoftware.minlog.Log
 import com.openbankproject.commons.ExecutionContext.Implicits.global
 import com.openbankproject.commons.dto._
@@ -1419,9 +1419,7 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
 
   override def makePaymentv210(fromAccount: BankAccount, toAccount: BankAccount, transactionRequestCommonBody: TransactionRequestCommonBodyJSON, amount: BigDecimal, description: String, transactionRequestType: TransactionRequestType, chargePolicy: String, callContext: Option[CallContext]): OBPReturnType[Box[TransactionId]] = {
         import com.openbankproject.commons.dto.{OutBoundMakePaymentv210 => OutBound, InBoundMakePaymentv210 => InBound}
-        val req = OutBound(callContext.map(_.toOutboundAdapterCallContext).orNull, fromAccount, toAccount, transactionRequestCommonBody, amount, description, transactionRequestType, chargePolicy)
-        println(req)
-        println(convertToReference(req))
+        val req = OutBound(callContext.map(_.toOutboundAdapterCallContext).orNull, convertToReference(fromAccount), toAccount, transactionRequestCommonBody, amount, description, transactionRequestType, chargePolicy)
         val response: Future[Box[InBound]] = (southSideActor ? req).mapTo[InBound].recoverWith(recoverFunction).map(Box !! _)
         response.map(convertToTuple[TransactionId](callContext))        
   }
@@ -5450,7 +5448,7 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
    * @tparam T type of instance
    * @return modified instance
    */
-  private def convertId[T](obj: T, customerIdConverter: String=> String, accountIdConverter: String=> String): T = {
+  private def convertId[T](obj: T, customerIdConverter: String=> String, accountIdConverter: String=> String, bankIdConverter: String=> String): T = {
     //1st: We must not convert when connector == mapped. this will ignore the implicitly_convert_ids props.
     //2rd: if connector != mapped, we still need the `implicitly_convert_ids == true`
 
@@ -5461,7 +5459,6 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
     }
 
     def isAccountId(fieldName: String, fieldType: Type, fieldValue: Any, ownerType: Type) = {
-      println((fieldName, fieldType, fieldValue, ownerType))
       (ownerType <:< typeOf[AccountId] && fieldName.equalsIgnoreCase("value") && fieldType =:= typeOf[String])||
       (ownerType <:< typeOf[AccountBasic] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])||
       (ownerType <:< typeOf[CoreAccount] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])||
@@ -5469,13 +5466,15 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
       (ownerType <:< typeOf[AccountHeld] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])
     }
 
+    def isBankId(fieldName: String, fieldType: Type, fieldValue: Any, ownerType: Type) = {
+      ownerType <:< typeOf[BankId] && fieldName.equalsIgnoreCase("value") && fieldType =:= typeOf[String]
+    }
+
     if(APIUtil.getPropsValue("connector","mapped") != "mapped" && APIUtil.getPropsAsBoolValue("implicitly_convert_ids", defaultValue = false)){
-      println("OK")
       ReflectUtils.resetNestedFields(obj){
         case (fieldName, fieldType, fieldValue: String, ownerType) if isCustomerId(fieldName, fieldType, fieldValue, ownerType) => customerIdConverter(fieldValue)
-        case (fieldName, fieldType, fieldValue: String, ownerType) if isAccountId(fieldName, fieldType, fieldValue, ownerType) =>
-          println("AAAAAAAAAA")
-          accountIdConverter(fieldValue)
+        case (fieldName, fieldType, fieldValue: String, ownerType) if isAccountId(fieldName, fieldType, fieldValue, ownerType) => accountIdConverter(fieldValue)
+        case (fieldName, fieldType, fieldValue: String, ownerType) if isBankId(fieldName, fieldType, fieldValue, ownerType) => bankIdConverter(fieldValue)
       }
       obj
     } else
@@ -5496,7 +5495,10 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
     def accountIdConverter(accountId: String): String = MappedAccountIdMappingProvider
       .getAccountPlainTextReference(AccountId(accountId))
       .openOrThrowException(s"$InvalidAccountIdFormat the invalid accountId is $accountId")
-    convertId[T](obj, customerIdConverter, accountIdConverter)
+    def bankIdConverter(bankId: String): String = MappedBankIdMappingProvider
+      .getBankPlainTextReference(BankId(bankId))
+      .openOrThrowException(s"InvalidBankId the invalid bankId is $bankId")
+    convertId[T](obj, customerIdConverter, accountIdConverter, bankIdConverter)
   }
 
   /**
@@ -5514,10 +5516,13 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
     def accountIdConverter(accountReference: String): String = MappedAccountIdMappingProvider
       .getOrCreateAccountId(accountReference)
       .map(_.value).openOrThrowException(s"$InvalidAccountIdFormat the invalid accountReference is $accountReference")
+    def bankIdConverter(bankReference: String): String = MappedBankIdMappingProvider
+      .getOrCreateBankId(bankReference)
+      .map(_.value).openOrThrowException(s"InvalidBank the invalid bankReference is $bankReference")
     if(obj.isInstanceOf[EmptyBox]) {
       obj
     } else {
-      convertId[T](obj, customerIdConverter, accountIdConverter)
+      convertId[T](obj, customerIdConverter, accountIdConverter, bankIdConverter)
     }
   }
 }

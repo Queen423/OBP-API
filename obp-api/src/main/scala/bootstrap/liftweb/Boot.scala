@@ -84,7 +84,7 @@ import code.metrics.{MappedConnectorMetric, MappedMetric}
 import code.migration.MigrationScriptLog
 import code.model._
 import code.model.dataAccess._
-import code.model.dataAccess.internalMapping.AccountIdMapping
+import code.model.dataAccess.internalMapping.{AccountIdMapping, BankIdMapping}
 import code.obp.grpc.HelloWorldServer
 import code.productAttributeattribute.MappedProductAttribute
 import code.productcollection.MappedProductCollection
@@ -838,6 +838,7 @@ object ToSchemify {
     DynamicData,
     DynamicEndpoint,
     AccountIdMapping,
+    BankIdMapping,
     DirectDebit,
     StandingOrder,
     MappedUserRefreshes
