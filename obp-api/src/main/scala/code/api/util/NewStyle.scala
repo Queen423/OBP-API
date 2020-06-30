@@ -738,6 +738,21 @@ object NewStyle {
         
       }
     }
+
+    def getCounterpartyByIbanAndAccountId(iban: String, accountId: AccountId, callContext: Option[CallContext]) : OBPReturnType[CounterpartyTrait] =
+    {
+      Connector.connector.vend.getCounterpartyByIbanAndAccountId(iban: String, accountId: AccountId, callContext: Option[CallContext]) map { i =>
+        (unboxFullOrFail(
+          i._1,
+          callContext,
+          s"$CounterpartyNotFoundByIban. Please check how do you create Counterparty, " +
+            s"set the proper IBan value to `other_account_secondary_routing_address`. Current Iban = $iban. " +
+            s"Check also the accountId, Current AccountId = ${accountId.value}",
+          404),
+          i._2)
+
+      }
+    }
     
     def getTransactionRequestImpl(transactionRequestId: TransactionRequestId, callContext: Option[CallContext]): OBPReturnType[TransactionRequest] = 
     {

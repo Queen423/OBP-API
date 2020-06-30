@@ -641,7 +641,7 @@ trait APIMethods400 {
                     json.extract[TransactionRequestBodySEPAJSON]
                   }
                   toIban = transDetailsSEPAJson.to.iban
-                  (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIban(toIban, cc.callContext)
+                  (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toIban, fromAccount.accountId, cc.callContext)
                   toAccount <- NewStyle.function.toBankAccount(toCounterparty, true, callContext)
                   _ <- Helper.booleanToFuture(s"$CounterpartyBeneficiaryPermit") {
                     toCounterparty.isBeneficiary
