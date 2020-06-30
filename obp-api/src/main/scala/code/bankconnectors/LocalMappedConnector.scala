@@ -92,7 +92,7 @@ import com.openbankproject.commons.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.language.postfixOps
 import scala.math.{BigDecimal, BigInt}
-import scala.util.Random
+import scala.util.{Random, Success, Try}
 import _root_.akka.http.scaladsl.model.HttpMethod
 import com.openbankproject.commons.dto.ProductCollectionItemsTree
 
@@ -737,6 +737,10 @@ object LocalMappedConnector extends Connector with MdcLoggable {
     Future(Counterparties.counterparties.vend.getCounterpartyByIban(iban), callContext)
   }
 
+  override def getCounterpartyByIbanAndAccountId(iban: String, accountId: AccountId, callContext: Option[CallContext]) = {
+    Future(Counterparties.counterparties.vend.getCounterpartyByIbanAndAccountId(iban, accountId), callContext)
+  }
+
 
   override def getPhysicalCards(user: User) = {
     val list = code.cards.PhysicalCard.physicalCardProvider.vend.getPhysicalCards(user)
@@ -1081,7 +1085,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       }
       fromTransAmt = -amount //from fromAccount balance should decrease
       toTransAmt = fx.convert(amount, rate)
-      (sentTransactionId, callContext) <- saveHistoricalTransaction(
+      (_sentTransactionId, callContext) <- saveHistoricalTransaction(
         fromAccount: BankAccount,
         toAccount: BankAccount,
         posted: Date,
@@ -1092,7 +1096,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
         chargePolicy: String,
         callContext: Option[CallContext]
       )
-      (_sentTransactionId, callContext) <- saveHistoricalTransaction(
+      (sentTransactionId, callContext) <- saveHistoricalTransaction(
         toAccount: BankAccount,
         fromAccount: BankAccount,
         posted: Date,

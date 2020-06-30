@@ -36,6 +36,10 @@ object RemotedataCounterparties extends ObpActorInit with Counterparties {
     (actor ? cc.getCounterpartyByIban(iban: String)).mapTo[Box[CounterpartyTrait]]
   )
 
+  override def getCounterpartyByIbanAndAccountId(iban: String, accountId: AccountId): Box[CounterpartyTrait] = getValueFromFuture(
+    (actor ? cc.getCounterpartyByIbanAndAccountId(iban: String, accountId: AccountId)).mapTo[Box[CounterpartyTrait]]
+  )
+
   override def getCounterparties(thisBankId: BankId, thisAccountId: AccountId, viewId: ViewId): Box[List[CounterpartyTrait]] = getValueFromFuture(
     (actor ? cc.getCounterparties(thisBankId, thisAccountId, viewId)).mapTo[Box[List[CounterpartyTrait]]]
   )

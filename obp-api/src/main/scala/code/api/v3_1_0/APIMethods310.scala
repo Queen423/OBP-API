@@ -60,7 +60,7 @@ import scala.collection.mutable.ArrayBuffer
 import com.openbankproject.commons.ExecutionContext.Implicits.global
 
 import scala.concurrent.Future
-import scala.util.Random
+import scala.util.{Failure, Random, Success}
 import scala.reflect.runtime.universe.MethodSymbol
 
 trait APIMethods310 {
@@ -5646,7 +5646,10 @@ trait APIMethods310 {
             transDetailsJson <- NewStyle.function.tryons(s"$InvalidJsonFormat The Json body should be the $PostHistoricalTransactionJson ", 400, callContext) {
               json.extract[PostHistoricalTransactionJson]
             }
+
             fromAccountPost = transDetailsJson.from
+            toAccountPost = transDetailsJson.to
+
             (fromAccount, callContext) <- if (fromAccountPost.bank_id.isDefined && fromAccountPost.account_id.isDefined && fromAccountPost.counterparty_id.isEmpty){
               for{
                 (_, callContext) <- NewStyle.function.getBank(BankId(fromAccountPost.bank_id.get), callContext)
@@ -5661,21 +5664,33 @@ trait APIMethods310 {
               }yield{
                 (fromAccount, callContext)
               }
-            } else if (fromAccountPost.account_iban.isDefined && fromAccountPost.counterparty_iban.isEmpty) {
+            } else if (fromAccountPost.account_iban.isDefined) {
             for {
               (fromAccount, callContext) <- NewStyle.function.getBankAccountByIban(iban = fromAccountPost.account_iban.get, callContext)
             } yield (fromAccount, callContext)
-            } else if (fromAccountPost.counterparty_iban.isDefined && fromAccountPost.account_iban.isEmpty) {
+            } else if (fromAccountPost.counterparty_iban.isDefined && toAccountPost.account_iban.isDefined) {
               for {
-                (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIban(iban = fromAccountPost.counterparty_iban.get, callContext)
+                (toAccount, callContext) <- NewStyle.function.getBankAccountByIban(iban = toAccountPost.account_iban.get, callContext)
+                (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(iban = fromAccountPost.counterparty_iban.get, toAccount.accountId, callContext).recoverWith {
+                  case _ => NewStyle.function.createCounterparty(
+                    name = fromAccountPost.counterparty_name.getOrElse(""),
+                    description = "Counterparty added automatically",
+                    createdByUserId = callContext.map(_.userId).getOrElse(""),
+                    thisBankId = toAccount.bankId.value,
+                    thisAccountId = toAccount.accountId.value,
+                    thisViewId = "owner",
+                    "", "",
+                    "IBAN", fromAccountPost.counterparty_iban.get,
+                    "BIC", fromAccountPost.bank_bic.getOrElse(""),
+                    "", "", isBeneficiary = true, List.empty, callContext
+                  )
+                }
                 fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, false, callContext)
               } yield (fromAccount, callContext)
             } else {
               throw new RuntimeException(s"$InvalidJsonFormat from object should only contain bank_id and account_id or counterparty_id in the post json body.")
             }
-            
-            
-            toAccountPost = transDetailsJson.to
+
             (toAccount, callContext) <- if (toAccountPost.bank_id.isDefined && toAccountPost.account_id.isDefined && toAccountPost.counterparty_id.isEmpty){
               for{
                 (_, callContext) <- NewStyle.function.getBank(BankId(toAccountPost.bank_id.get), callContext)
@@ -5690,14 +5705,15 @@ trait APIMethods310 {
               }yield{
                 (toAccount, callContext)
               }
-            } else if (toAccountPost.account_iban.isDefined && toAccountPost.counterparty_iban.isEmpty) {
+            } else if (toAccountPost.account_iban.isDefined) {
               for {
                 (toAccount, callContext) <- NewStyle.function.getBankAccountByIban(iban = toAccountPost.account_iban.get, callContext)
               } yield (toAccount, callContext)
-            } else if (toAccountPost.counterparty_iban.isDefined && toAccountPost.account_iban.isEmpty) {
+            } else if (toAccountPost.counterparty_iban.isDefined && fromAccountPost.account_iban.isDefined) {
               for {
-                (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIban(iban = toAccountPost.counterparty_iban.get, callContext)
-                toAccount <- NewStyle.function.toBankAccount(fromCounterparty, true, callContext)
+                // TODO: Create the counterparty if it doesn't exist ?
+                (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(iban = toAccountPost.counterparty_iban.get, fromAccount.accountId, callContext)
+                toAccount <- NewStyle.function.toBankAccount(toCounterparty, true, callContext)
               } yield (toAccount, callContext)
             } else {
               throw new RuntimeException(s"$InvalidJsonFormat to object should only contain bank_id and account_id or counterparty_id in the post json body.")
