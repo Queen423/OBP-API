@@ -1041,6 +1041,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
 
   override def makePaymentv210(fromAccount: BankAccount,
                                toAccount: BankAccount,
+                               transactionRequestId: TransactionRequestId,
                                transactionRequestCommonBody: TransactionRequestCommonBodyJSON,
                                amount: BigDecimal,
                                description: String,
@@ -3552,6 +3553,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
             (createdTransactionId, callContext) <- NewStyle.function.makePaymentv210(
               fromAccount,
               toAccount,
+              transactionRequest.id,
               transactionRequestCommonBody,
               BigDecimal(transactionRequestCommonBody.value.amount),
               transactionRequestCommonBody.description,
@@ -3664,6 +3666,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
             (createdTransactionId, callContext) <- NewStyle.function.makePaymentv210(
               fromAccount,
               toAccount,
+              transactionRequest.id,
               transactionRequestCommonBody,
               BigDecimal(transactionRequestCommonBody.value.amount),
               transactionRequestCommonBody.description,
@@ -3900,6 +3903,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
             (transactionId, callContext) <- NewStyle.function.makePaymentv210(
               fromAccount,
               toAccount,
+              transactionRequest.id,
               transactionRequestCommonBody = sandboxBody,
               BigDecimal(sandboxBody.value.amount),
               sandboxBody.description,
@@ -3928,6 +3932,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
             (transactionId, callContext) <- NewStyle.function.makePaymentv210(
               fromAccount,
               toAccount,
+              transactionRequest.id,
               transactionRequestCommonBody = counterpartyBody,
               BigDecimal(counterpartyBody.value.amount),
               counterpartyBody.description,
@@ -3956,6 +3961,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
             (transactionId, callContext) <- NewStyle.function.makePaymentv210(
               fromAccount,
               toAccount,
+              transactionRequest.id,
               transactionRequestCommonBody = sepaBody,
               BigDecimal(sepaBody.value.amount),
               sepaBody.description,
@@ -3976,6 +3982,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
           (transactionId, callContext) <- NewStyle.function.makePaymentv210(
             fromAccount,
             fromAccount,
+            transactionRequest.id,
             transactionRequestCommonBody = freeformBody,
             BigDecimal(freeformBody.value.amount),
             freeformBody.description,
@@ -3996,6 +4003,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
           (createdTransactionId, callContext) <- NewStyle.function.makePaymentv210(
             fromAccount,
             toAccount,
+            transactionRequest.id,
             TransactionRequestCommonBodyJSONCommons(
               toSepaCreditTransfers.instructedAmount,
               ""
