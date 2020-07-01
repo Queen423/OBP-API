@@ -3092,9 +3092,9 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       (_, callContext)
     }
   }
-  override def getAccountAttributesByAccountCanBeSeenOnView(bankId: BankId, 
+  override def getAccountAttributesByAccountCanBeSeenOnView(bankId: BankId,
                                                             accountId: AccountId,
-                                                            viewId: ViewId, 
+                                                            viewId: ViewId,
                                                             callContext: Option[CallContext]
                                                            ): OBPReturnType[Box[List[AccountAttribute]]] = {
     AccountAttributeX.accountAttributeProvider.vend.getAccountAttributesByAccountCanBeSeenOnView(
@@ -4034,24 +4034,17 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       (transactionRequest, callContext) <- status match {
         case TransactionRequestStatus.COMPLETED =>
           for {
-            (createdTransactionId, callContext) <- transactionRequestType match {
-              case TransactionRequestType("SEPA") =>
-                Connector.connector.vend.makePaymentV400(transactionRequest, reasons, callContext)map { i =>
-                  (unboxFullOrFail(i._1, callContext, s"$InvalidConnectorResponseForMakePayment ",400), i._2)
-                }
-              case _ =>
-                NewStyle.function.makePaymentv210(
-                  fromAccount,
-                  toAccount,
-                  transactionRequest.id,
-                  transactionRequestCommonBody,
-                  BigDecimal(transactionRequestCommonBody.value.amount),
-                  transactionRequestCommonBody.description,
-                  transactionRequestType,
-                  chargePolicy,
-                  callContext
-                )
-            }
+            (createdTransactionId, callContext) <- NewStyle.function.makePaymentv210(
+              fromAccount,
+              toAccount,
+              transactionRequest.id,
+              transactionRequestCommonBody,
+              BigDecimal(transactionRequestCommonBody.value.amount),
+              transactionRequestCommonBody.description,
+              transactionRequestType,
+              chargePolicy,
+              callContext
+            )
             //set challenge to null, otherwise it have the default value "challenge": {"id": "","allowed_attempts": 0,"challenge_type": ""}
             transactionRequest <- Future(transactionRequest.copy(challenge = null))
 
