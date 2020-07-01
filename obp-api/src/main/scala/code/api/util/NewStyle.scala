@@ -809,6 +809,7 @@ object NewStyle {
     
     def makePaymentv210(fromAccount: BankAccount,
                       toAccount: BankAccount,
+                      transactionRequestId: TransactionRequestId,
                       transactionRequestCommonBody: TransactionRequestCommonBodyJSON,
                       amount: BigDecimal,
                       description: String,
@@ -818,6 +819,7 @@ object NewStyle {
       Connector.connector.vend.makePaymentv210(
         fromAccount: BankAccount,
         toAccount: BankAccount,
+        transactionRequestId: TransactionRequestId,
         transactionRequestCommonBody: TransactionRequestCommonBodyJSON,
         amount: BigDecimal,
         description: String,
