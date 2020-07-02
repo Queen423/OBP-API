@@ -5473,8 +5473,8 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
 
     if(APIUtil.getPropsValue("connector","mapped") != "mapped" && APIUtil.getPropsAsBoolValue("implicitly_convert_ids", defaultValue = false)){
       ReflectUtils.resetNestedFields(obj){
-        case (fieldName, fieldType, fieldValue: String, ownerType) if isCustomerId(fieldName, fieldType, fieldValue, ownerType) => customerIdConverter(fieldValue)
-        case (fieldName, fieldType, fieldValue: String, ownerType) if isAccountId(fieldName, fieldType, fieldValue, ownerType) => accountIdConverter(fieldValue)
+        // case (fieldName, fieldType, fieldValue: String, ownerType) if isCustomerId(fieldName, fieldType, fieldValue, ownerType) => customerIdConverter(fieldValue)
+        // case (fieldName, fieldType, fieldValue: String, ownerType) if isAccountId(fieldName, fieldType, fieldValue, ownerType) => accountIdConverter(fieldValue)
         case (fieldName, fieldType, fieldValue: String, ownerType) if isBankId(fieldName, fieldType, fieldValue, ownerType) => bankIdConverter(fieldValue)
       }
       obj
