@@ -1086,7 +1086,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       }
       fromTransAmt = -amount //from fromAccount balance should decrease
       toTransAmt = fx.convert(amount, rate)
-      (_sentTransactionId, callContext) <- saveHistoricalTransaction(
+      (sentTransactionIdFT, callContextFT) <- saveHistoricalTransaction(
         fromAccount: BankAccount,
         toAccount: BankAccount,
         posted: Date,
@@ -1097,7 +1097,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
         chargePolicy: String,
         callContext: Option[CallContext]
       )
-      (sentTransactionId, callContext) <- saveHistoricalTransaction(
+      (sentTransactionIdTF, callContextTF) <- saveHistoricalTransaction(
         toAccount: BankAccount,
         fromAccount: BankAccount,
         posted: Date,
@@ -1107,6 +1107,12 @@ object LocalMappedConnector extends Connector with MdcLoggable {
         transactionRequestType: String,
         chargePolicy: String,
         callContext: Option[CallContext])
+      (sentTransactionId, callContext) <- Future{
+        sentTransactionIdFT match {
+          case Full(_) => (sentTransactionIdFT, callContextFT)
+          case _ => (sentTransactionIdTF, callContextTF)
+        }
+      }
     } yield {
       (sentTransactionId, callContext)
     }
