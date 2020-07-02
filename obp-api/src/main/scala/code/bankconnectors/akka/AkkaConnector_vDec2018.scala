@@ -1499,7 +1499,7 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
         val response: Future[Box[InBound]] = (southSideActor ? req).mapTo[InBound].recoverWith(recoverFunction).map(Box !! _) 
         response.map(convertToTuple[TransactionRequest](callContext))        
   }
-
+          
 
   messageDocs += getTransactionRequests210Doc
   def getTransactionRequests210Doc = MessageDoc(
