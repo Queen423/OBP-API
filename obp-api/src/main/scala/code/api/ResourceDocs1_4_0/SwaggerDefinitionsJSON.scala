@@ -3793,12 +3793,23 @@ object SwaggerDefinitionsJSON {
 
   val postAccountAccessJsonV400 = PostAccountAccessJsonV400(userIdExample.value, PostViewJsonV400(ExampleValue.viewIdExample.value, true))
   val revokedJsonV400 = RevokedJsonV400(true)
-  
+
+  val transactionRequestRefundTo = TransactionRequestRefundTo(
+    bank_id = Some(bankIdExample.value),
+    account_id = Some(accountIdExample.value),
+    counterparty_iban = Some(ibanExample.value)
+  )
+
+  val transactionRequestRefundFrom = TransactionRequestRefundFrom(
+    counterparty_iban = ibanExample.value
+  )
+
   val transactionRequestBodyRefundJsonV400 = TransactionRequestBodyRefundJsonV400(
-    to = transactionRequestAccountJsonV140,
+    to = Some(transactionRequestRefundTo),
+    from = Some(transactionRequestRefundFrom),
     value = amountOfMoneyJsonV121,
     description = "A refund description. ",
-    refund = RefundJson(transactionIdExample.value)
+    refund = RefundJson(transactionIdExample.value, transactionRequestRefundReasonCodeExample.value)
   )
 
   val customerAttributesResponseJson = CustomerAttributesResponseJson (
