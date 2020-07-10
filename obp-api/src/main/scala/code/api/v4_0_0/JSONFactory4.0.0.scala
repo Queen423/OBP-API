@@ -213,15 +213,28 @@ case class RevokedJsonV400(revoked: Boolean)
 
 // the data from endpoint, extract as valid JSON
 case class TransactionRequestBodyRefundJsonV400(
-  to: TransactionRequestAccountJsonV140,
+  to: Option[TransactionRequestRefundTo],
+  from: Option[TransactionRequestRefundFrom],
   value: AmountOfMoneyJsonV121,
   description: String,
-  refund:RefundJson
+  refund: RefundJson
 ) extends TransactionRequestCommonBodyJSON
 
+case class TransactionRequestRefundTo(
+                                       bank_id: Option[String],
+                                       account_id : Option[String],
+                                       counterparty_iban: Option[String]
+                                     )
+
+case class TransactionRequestRefundFrom(
+                                         counterparty_iban: String
+                                       )
+
 case class RefundJson(
-  transaction_id: String
+  transaction_id: String,
+  reason_code: String
 )
+
 case class CustomerAttributeJsonV400(
   name: String,
   `type`: String,

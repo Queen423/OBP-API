@@ -27,7 +27,7 @@ object ExampleValue {
 
   lazy val accountIdExample = ConnectorField("8ca8a7e4-6d02-40e3-a129-0b2bf89de9f0", s"A string that, in combination with the bankId MUST uniquely identify the account on this OBP instance. SHOULD be a UUID. MUST NOT be able to guess accountNumber from accountId. OBP-API or Adapter keeps a mapping between accountId and accountNumber. AccountId is a non reversible hash of the human readable account number.")
   lazy val account_idExample = accountIdExample
-  
+
 
   lazy val accountNumberExample = ConnectorField("546387432", s"A human friendly string that identifies the account at the bank, possibly in combination with the branch and account type.")
 
@@ -178,7 +178,7 @@ object ExampleValue {
   glossaryItems += makeGlossaryItem("Account.iban", ibanExample)
 
   lazy val transactionRequestIban = ibanExample
-  
+
   lazy val gitCommitExample = ConnectorField("59623811dd8a41f6ffe67be46954eee11913dc28", "Identifies the code running on the OBP-API (Connector) or Adapter.")
 
   lazy val subExample = ConnectorField(s"${userNameExample.value}","An identifier for the user, unique among all OBP-API users and never reused")
@@ -234,9 +234,12 @@ object ExampleValue {
 
   lazy val transactionRequestIdExample = ConnectorField("8138a7e4-6d02-40e3-a129-0b2bf89de9f1", "The Transaction Request Id")
   glossaryItems += makeGlossaryItem("Transaction Requests.id", transactionRequestIdExample)
-  
+
   lazy val transactionRequestCounterpartyIdExample = counterpartyIdExample
-  
+
+  lazy val transactionRequestRefundReasonCodeExample = ConnectorField("CUST", "The Transaction Request Refund Reason Code defines the reason of refund request according with the SEPA Credit Transfer Scheme.")
+  glossaryItems += makeGlossaryItem("Transaction Requests.Transaction Request Refund Reason Code", transactionRequestRefundReasonCodeExample)
+
   lazy val currencyExample = balanceCurrencyExample
 
   lazy val owner1Example = ConnectorField("SusanSmith", "A username that is the owner of the account.")

@@ -509,10 +509,41 @@ trait APIMethods400 {
                   }
 
                   transactionId = TransactionId(transactionRequestBodyRefundJson.refund.transaction_id)
-                  toBankId = BankId(transactionRequestBodyRefundJson.to.bank_id)
-                  toAccountId = AccountId(transactionRequestBodyRefundJson.to.account_id)
-                  (transaction, callContext) <- NewStyle.function.getTransaction(fromAccount.bankId, fromAccount.accountId, transactionId, cc.callContext)
-                  (toAccount, callContext) <- NewStyle.function.checkBankAccountExists(toBankId, toAccountId, cc.callContext)
+                  refundReasonCode = transactionRequestBodyRefundJson.refund.reason_code
+
+                  (fromAccount, toAccount, transaction, callContext) <- transactionRequestBodyRefundJson.to match {
+                    case Some(refundTo) if refundTo.account_id.isDefined && refundTo.bank_id.isDefined =>
+                      val toBankId = BankId(refundTo.bank_id.get)
+                      val toAccountId = AccountId(refundTo.account_id.get)
+                      for {
+                        (transaction, callContext) <- NewStyle.function.getTransaction(fromAccount.bankId, fromAccount.accountId, transactionId, cc.callContext)
+                        (toAccount, callContext) <- NewStyle.function.checkBankAccountExists(toBankId, toAccountId, cc.callContext)
+                      } yield (fromAccount, toAccount, transaction, callContext)
+
+                    case Some(refundTo) if refundTo.counterparty_iban.isDefined =>
+                      val toIban = refundTo.counterparty_iban.get
+                      for {
+                        (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toIban, fromAccount.accountId, cc.callContext)
+                        toAccount <- NewStyle.function.toBankAccount(toCounterparty, isOutgoingAccount = true, callContext)
+                        _ <- Helper.booleanToFuture(s"$CounterpartyBeneficiaryPermit") {
+                          toCounterparty.isBeneficiary
+                        }
+                        (transaction, callContext) <- NewStyle.function.getTransaction(fromAccount.bankId, fromAccount.accountId, transactionId, cc.callContext)
+                      } yield (fromAccount, toAccount, transaction, callContext)
+
+                    case None if transactionRequestBodyRefundJson.from.isDefined =>
+                      val fromIban = transactionRequestBodyRefundJson.from.get.counterparty_iban
+                      val toAccount = fromAccount
+                      for {
+                        (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(fromIban, toAccount.accountId, cc.callContext)
+                        fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, isOutgoingAccount = false, callContext)
+                        _ <- Helper.booleanToFuture(s"$CounterpartyBeneficiaryPermit") {
+                          fromCounterparty.isBeneficiary
+                        }
+                        (transaction, callContext) <- NewStyle.function.getTransaction(toAccount.bankId, toAccount.accountId, transactionId, cc.callContext)
+                      } yield (fromAccount, toAccount, transaction, callContext)
+                  }
+
                   transDetailsSerialized <- NewStyle.function.tryons(UnknownError, 400, callContext) {
                     write(transactionRequestBodyRefundJson)(Serialization.formats(NoTypeHints))
                   }
@@ -525,8 +556,8 @@ trait APIMethods400 {
 //                    !((transaction.description.toString contains(" Refund to ")) && (transaction.description.toString contains(" and transaction_id(")))
 //                  }
 
-                  //we add the extro info (counterparty name + transaction_id) for this special Refund endpoint.
-                  newDescription = s"${transactionRequestBodyRefundJson.description} - Refund for transaction_id: (${transactionId.value}) to ${transaction.otherAccount.counterpartyName}"
+                  //we add the extra info (counterparty name + transaction_id + reason_code) for this special Refund endpoint.
+                  newDescription = s"${transactionRequestBodyRefundJson.description} - Refund for transaction_id: (${transactionId.value}) to ${transaction.otherAccount.counterpartyName} - Reason code : ${refundReasonCode}"
 
                   //This is the refund endpoint, the original fromAccount is the `toAccount` which will receive money.
                   refundToAccount = fromAccount
@@ -1381,7 +1412,7 @@ trait APIMethods400 {
           }
       }
     }
-    
+
 
     staticResourceDocs += ResourceDoc(
       getEntitlements,
@@ -1723,8 +1754,7 @@ trait APIMethods400 {
         $UserNoPermissionAccessView,
         UnknownError),
       Catalogs(notCore, notPSD2, notOBWG),
-      apiTagAccount ::  apiTagNewStyle :: Nil,
-      connectorMethods = Some(List("obp.checkBankAccountExists","obp.getAccountAttributesByAccount"))
+      apiTagAccount ::  apiTagNewStyle :: Nil
     )
     lazy val getAccountByIban : OBPEndpoint = {
       case "banks" :: BankId(bankId) :: "accounts" :: ViewId(viewId) :: "account" :: Nil JsonPost json -> _ => {
@@ -3956,7 +3986,7 @@ trait APIMethods400 {
       Some(List(canDeleteTransactionCascade)))
 
     lazy val deleteTransactionCascade : OBPEndpoint = {
-      case "management" :: "cascading" :: "banks" :: BankId(bankId) :: "accounts" :: AccountId(accountId) :: 
+      case "management" :: "cascading" :: "banks" :: BankId(bankId) :: "accounts" :: AccountId(accountId) ::
         "transactions" :: TransactionId(transactionId) :: Nil JsonDelete _ => {
         cc =>
           for {
@@ -3967,7 +3997,7 @@ trait APIMethods400 {
           }
       }
     }
-    
+
     staticResourceDocs += ResourceDoc(
       deleteAccountCascade,
       implementedInApiVersion,
@@ -4004,7 +4034,7 @@ trait APIMethods400 {
           }
       }
     }
-    
+
     staticResourceDocs += ResourceDoc(
       deleteProductCascade,
       implementedInApiVersion,

@@ -1420,7 +1420,7 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
 
   override def makePaymentv210(fromAccount: BankAccount, toAccount: BankAccount, transactionRequestId: TransactionRequestId, transactionRequestCommonBody: TransactionRequestCommonBodyJSON, amount: BigDecimal, description: String, transactionRequestType: TransactionRequestType, chargePolicy: String, callContext: Option[CallContext]): OBPReturnType[Box[TransactionId]] = {
         import com.openbankproject.commons.dto.{OutBoundMakePaymentv210 => OutBound, InBoundMakePaymentv210 => InBound}
-        val req = OutBound(callContext.map(_.toOutboundAdapterCallContext).orNull, convertToReference(fromAccount), toAccount, transactionRequestId, transactionRequestCommonBody, amount, description, transactionRequestType, chargePolicy)
+        val req = convertToReference(OutBound(callContext.map(_.toOutboundAdapterCallContext).orNull, fromAccount, toAccount, transactionRequestId, transactionRequestCommonBody, amount, description, transactionRequestType, chargePolicy))
         val response: Future[Box[InBound]] = (southSideActor ? req).mapTo[InBound].recoverWith(recoverFunction).map(Box !! _)
         response.map(convertToTuple[TransactionId](callContext))        
   }
@@ -5467,8 +5467,8 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
       (ownerType <:< typeOf[AccountHeld] && fieldName.equalsIgnoreCase("id") && fieldType =:= typeOf[String])
     }
 
-    def isBankId(fieldName: String, fieldType: Type, fieldValue: Any, ownerType: Type) = {
-      ownerType <:< typeOf[BankId] && fieldName.equalsIgnoreCase("value") && fieldType =:= typeOf[String]
+    def isBankId(fieldName: String, fieldType: Type, fieldValue: String, ownerType: Type) = {
+      ownerType <:< typeOf[BankId] && fieldName.equalsIgnoreCase("value") && fieldType =:= typeOf[String] && !fieldValue.matches("[A-Z]{6,6}[A-Z2-9][A-NP-Z0-9]([A-Z0-9]{3,3}){0,1}")
     }
 
     if(APIUtil.getPropsValue("connector","mapped") != "mapped" && APIUtil.getPropsAsBoolValue("implicitly_convert_ids", defaultValue = false)){
