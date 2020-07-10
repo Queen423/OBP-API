@@ -1692,6 +1692,69 @@ trait APIMethods400 {
 
 
     staticResourceDocs += ResourceDoc(
+      getAccountByIban,
+      implementedInApiVersion,
+      nameOf(getAccountByIban),
+      "POST",
+      "/banks/BANK_ID/accounts/VIEW_ID/account",
+      "Get Account by Iban",
+      """Information returned about an account specified by iban as moderated by the view (VIEW_ID):
+        |
+        |* Number
+        |* Owners
+        |* Type
+        |* Balance
+        |* IBAN
+        |* Available views (sorted by short_name)
+        |
+        |More details about the data moderation by the view [here](#1_2_1-getViewsForBankAccount).
+        |
+        |PSD2 Context: PSD2 requires customers to have access to their account information via third party applications.
+        |This call provides balance and other account information via delegated authentication using OAuth.
+        |
+        |Authentication is required if the 'is_public' field in view (VIEW_ID) is not set to `true`.
+        |""".stripMargin,
+      ibanJson,
+      moderatedAccountJSON400,
+      List(
+        $UserNotLoggedIn,
+        $BankNotFound,
+        $BankAccountNotFound,
+        $UserNoPermissionAccessView,
+        UnknownError),
+      Catalogs(notCore, notPSD2, notOBWG),
+      apiTagAccount ::  apiTagNewStyle :: Nil,
+      connectorMethods = Some(List("obp.checkBankAccountExists","obp.getAccountAttributesByAccount"))
+    )
+    lazy val getAccountByIban : OBPEndpoint = {
+      case "banks" :: BankId(bankId) :: "accounts" :: ViewId(viewId) :: "account" :: Nil JsonPost json -> _ => {
+        cc =>
+          val failMsg = s"$InvalidJsonFormat The Json body should be the $ibanJson"
+          for {
+            postJson <- NewStyle.function.tryons(failMsg, 400, cc.callContext) {
+              json.extract[IbanPostJson]
+            }
+            (account, callContext) <- NewStyle.function.getBankAccountByIban(postJson.iban, cc.callContext)
+            _ <- Future(println(account))
+
+            view <- NewStyle.function.systemView(viewId, cc.callContext)
+            moderatedAccount <- NewStyle.function.moderatedBankAccountCore(account, view, cc.user, cc.callContext)
+
+            (accountAttributes, callContext) <- NewStyle.function.getAccountAttributesByAccount(
+              bankId,
+              account.accountId,
+              cc.callContext: Option[CallContext])
+          } yield {
+            val availableViews = Views.views.vend.privateViewsUserCanAccessForAccount(cc.user.openOrThrowException("Exception user"), BankIdAccountId(account.bankId, account.accountId))
+            val viewsAvailable = availableViews.map(JSONFactory.createViewJSON).sortBy(_.short_name)
+            val tags = Tags.tags.vend.getTagsOnAccount(bankId, account.accountId)(viewId)
+            (createBankAccountJSON(moderatedAccount, viewsAvailable, accountAttributes, tags), HttpCode.`200`(callContext))
+          }
+      }
+    }
+
+
+    staticResourceDocs += ResourceDoc(
       getCustomersByCustomerPhoneNumber,
       implementedInApiVersion,
       nameOf(getCustomersByCustomerPhoneNumber),

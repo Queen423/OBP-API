@@ -292,6 +292,8 @@ case class UserLockStatusJson(
                                last_lock_date : Date
                              )
 
+case class IbanPostJson(iban: String)
+
 case class DatabaseInfoJson(product_name: String, product_version: String)
 object JSONFactory400 {
   def createBankJSON400(bank: Bank): BankJson400 = {
