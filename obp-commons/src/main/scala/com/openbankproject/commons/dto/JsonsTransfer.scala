@@ -155,6 +155,12 @@ case class OutBoundMakePaymentv210(outboundAdapterCallContext: OutboundAdapterCa
 
 case class InBoundMakePaymentv210(inboundAdapterCallContext: InboundAdapterCallContext, status: Status, data: TransactionId) extends InBoundTrait[TransactionId]
 
+case class OutBoundNotifyTransactionRequest(outboundAdapterCallContext: OutboundAdapterCallContext,
+                                            fromAccount: BankAccountCommons, toAccount: BankAccountCommons,
+                                            transactionRequest: TransactionRequest) extends TopicTrait
+
+case class InBoundNotifyTransactionRequest(inboundAdapterCallContext: InboundAdapterCallContext,
+                                           status: Status, data: TransactionRequestStatus.Value) extends InBoundTrait[TransactionRequestStatus.Value]
 
 case class OutBoundCreateTransactionRequestv210(outboundAdapterCallContext: OutboundAdapterCallContext,
                                                 initiator: User, //TODO FIXME

@@ -3470,13 +3470,13 @@ object LocalMappedConnector extends Connector with MdcLoggable {
   // Set initial status
   override def getStatus(challengeThresholdAmount: BigDecimal, transactionRequestCommonBodyAmount: BigDecimal, transactionRequestType: TransactionRequestType): Future[TransactionRequestStatus.Value] = {
     Future(
-      if (transactionRequestCommonBodyAmount < challengeThresholdAmount) {
+      if (transactionRequestCommonBodyAmount < challengeThresholdAmount && transactionRequestType.value != REFUND.toString) {
         // For any connector != mapped we should probably assume that transaction_status_scheduler_delay will be > 0
         // so that getTransactionRequestStatusesImpl needs to be implemented for all connectors except mapped.
         // i.e. if we are certain that saveTransaction will be honored immediately by the backend, then transaction_status_scheduler_delay
         // can be empty in the props file. Otherwise, the status will be set to STATUS_PENDING
         // and getTransactionRequestStatusesImpl needs to be run periodically to update the transaction request status.
-        if (APIUtil.getPropsAsLongValue("transaction_status_scheduler_delay").isEmpty || (transactionRequestType.value == REFUND.toString))
+        if (APIUtil.getPropsAsLongValue("transaction_status_scheduler_delay").isEmpty)
           TransactionRequestStatus.COMPLETED
         else
           TransactionRequestStatus.PENDING
@@ -3732,7 +3732,9 @@ object LocalMappedConnector extends Connector with MdcLoggable {
 
             newChallenge = TransactionRequestChallenge(challengeIds.headOption.getOrElse(""), allowed_attempts = 3, challenge_type = challengeType.getOrElse(TransactionChallengeTypes.OTP_VIA_API.toString))
             _ <- Future(saveTransactionRequestChallenge(transactionRequest.id, newChallenge))
-            transactionRequest <- Future(transactionRequest.copy(challenge = newChallenge))
+            (newTransactionRequestStatus, callContext) <- NewStyle.function.notifyTransactionRequest(fromAccount, toAccount, transactionRequest, callContext)
+            _ <- Future(saveTransactionRequestStatusImpl(transactionRequest.id, newTransactionRequestStatus.toString).openOrThrowException(attemptedToOpenAnEmptyBox))
+            transactionRequest <- Future(transactionRequest.copy(challenge = newChallenge, status = newTransactionRequestStatus.toString))
           } yield {
             (transactionRequest, callContext)
           }
@@ -3942,6 +3944,42 @@ object LocalMappedConnector extends Connector with MdcLoggable {
               transactionRequestCommonBody = counterpartyBody,
               BigDecimal(counterpartyBody.value.amount),
               counterpartyBody.description,
+              TransactionRequestType(transactionRequestType),
+              transactionRequest.charge_policy,
+              callContext
+            )
+          } yield {
+            (transactionId, callContext)
+          }
+        case REFUND =>
+          for {
+            (fromAccount, toAccount, callContext) <- {
+              if (fromAccount.accountId.value == transactionRequest.from.account_id) {
+                val toCounterpartyIban = transactionRequest.other_account_routing_address
+                for {
+                  (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toCounterpartyIban, fromAccount.accountId, callContext)
+                  toAccount <- NewStyle.function.toBankAccount(toCounterparty, true, callContext)
+                } yield (fromAccount, toAccount, callContext)
+              } else {
+                val fromCounterpartyIban = transactionRequest.from.account_id
+                val toAccount = fromAccount
+                for {
+                  (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(fromCounterpartyIban, toAccount.accountId, callContext)
+                  fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, false, callContext)
+                } yield (fromAccount, toAccount, callContext)
+              }
+            }
+            refundBody = TransactionRequestBodyCommonJSON(
+              value = AmountOfMoneyJsonV121(transactionRequest.body.value.currency, transactionRequest.body.value.amount),
+              description = transactionRequest.body.description,
+            )
+            (transactionId, callContext) <- NewStyle.function.makePaymentv210(
+              fromAccount,
+              toAccount,
+              transactionRequest.id,
+              transactionRequestCommonBody = refundBody,
+              BigDecimal(refundBody.value.amount),
+              refundBody.description,
               TransactionRequestType(transactionRequestType),
               transactionRequest.charge_policy,
               callContext

@@ -1122,6 +1122,9 @@ trait Connector extends MdcLoggable {
       chargePolicy: String
     )
 
+  def notifyTransactionRequest(fromAccount: BankAccount, toAccount: BankAccount, transactionRequest: TransactionRequest, callContext: Option[CallContext]): OBPReturnType[Box[TransactionRequestStatus.Value]] =
+    Future{(Failure(setUnimplementedError), callContext)}
+
   def saveTransactionRequestTransaction(transactionRequestId: TransactionRequestId, transactionId: TransactionId): Box[Boolean] = {
     //put connector agnostic logic here if necessary
     saveTransactionRequestTransactionImpl(transactionRequestId, transactionId)
