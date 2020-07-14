@@ -709,16 +709,16 @@ trait APIMethods400 {
                   refundReasonCode = transactionRequestBodyRefundJson.refund.reason_code
 
                   (fromAccount, toAccount, transaction, callContext) <- transactionRequestBodyRefundJson.to match {
-                    case Some(refundTo) if refundTo.account_id.isDefined && refundTo.bank_id.isDefined =>
-                      val toBankId = BankId(refundTo.bank_id.get)
-                      val toAccountId = AccountId(refundTo.account_id.get)
+                    case Some(refundRequestTo) if refundRequestTo.account_id.isDefined && refundRequestTo.bank_id.isDefined =>
+                      val toBankId = BankId(refundRequestTo.bank_id.get)
+                      val toAccountId = AccountId(refundRequestTo.account_id.get)
                       for {
                         (transaction, callContext) <- NewStyle.function.getTransaction(fromAccount.bankId, fromAccount.accountId, transactionId, cc.callContext)
                         (toAccount, callContext) <- NewStyle.function.checkBankAccountExists(toBankId, toAccountId, cc.callContext)
                       } yield (fromAccount, toAccount, transaction, callContext)
 
-                    case Some(refundTo) if refundTo.counterparty_iban.isDefined =>
-                      val toIban = refundTo.counterparty_iban.get
+                    case Some(refundRequestTo) if refundRequestTo.counterparty_iban.isDefined =>
+                      val toIban = refundRequestTo.counterparty_iban.get
                       for {
                         (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toIban, fromAccount.accountId, cc.callContext)
                         toAccount <- NewStyle.function.toBankAccount(toCounterparty, isOutgoingAccount = true, callContext)

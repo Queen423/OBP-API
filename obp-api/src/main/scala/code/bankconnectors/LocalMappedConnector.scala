@@ -240,7 +240,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
     scaMethod: Option[SCA],
     scaStatus: Option[SCAStatus], //Only use for BerlinGroup Now
     consentId: Option[String],    // Note: consentId and transactionRequestId are exclusive here.
-    authenticationMethodId: Option[String],      
+    authenticationMethodId: Option[String],
     callContext: Option[CallContext]
   ) = {
     def createHashedPassword(challengeAnswer: String) = {
@@ -300,7 +300,7 @@ object LocalMappedConnector extends Connector with MdcLoggable {
         val errorMessage = sendingResult.filter(_.isInstanceOf[Failure]).map(_.asInstanceOf[Failure].msg)
 
         if (sendingResult.forall(_ == Full(true))) hashedPassword else (Failure(errorMessage.toSet.mkString(" <- ")), callContext)
-      case _ => // All versions which precede v4.0.0 i.e. to keep backward compatibility 
+      case _ => // All versions which precede v4.0.0 i.e. to keep backward compatibility
         createHashedPassword("123")
     }
   }
@@ -318,15 +318,15 @@ object LocalMappedConnector extends Connector with MdcLoggable {
       (Challenges.ChallengeProvider.vend.validateChallenge(challengeId, hashOfSuppliedAnswer, userId), callContext)
     }
   }
-  
+
   override def getChallengesByTransactionRequestId(transactionRequestId: String, callContext:  Option[CallContext]): OBPReturnType[Box[List[ChallengeTrait]]] =
     Future {(Challenges.ChallengeProvider.vend.getChallengesByTransactionRequestId(transactionRequestId), callContext)}
 
 
-  override def getChallenge(challengeId: String, callContext:  Option[CallContext]): OBPReturnType[Box[ChallengeTrait]] = 
+  override def getChallenge(challengeId: String, callContext:  Option[CallContext]): OBPReturnType[Box[ChallengeTrait]] =
     Future {(Challenges.ChallengeProvider.vend.getChallenge(challengeId), callContext)}
 
-  override def validateChallengeAnswer(challengeId: String, hashOfSuppliedAnswer: String, callContext: Option[CallContext]): OBPReturnType[Box[Boolean]] = 
+  override def validateChallengeAnswer(challengeId: String, hashOfSuppliedAnswer: String, callContext: Option[CallContext]): OBPReturnType[Box[Boolean]] =
     Future { 
       val userId = callContext.map(_.user.map(_.userId).openOrThrowException(s"$UserNotLoggedIn Can not find the userId here."))
       (Full(Challenges.ChallengeProvider.vend.validateChallenge(challengeId, hashOfSuppliedAnswer, userId).isDefined), callContext)
@@ -3832,13 +3832,13 @@ object LocalMappedConnector extends Connector with MdcLoggable {
   // Set initial status
   override def getStatus(challengeThresholdAmount: BigDecimal, transactionRequestCommonBodyAmount: BigDecimal, transactionRequestType: TransactionRequestType): Future[TransactionRequestStatus.Value] = {
     Future(
-      if (transactionRequestCommonBodyAmount < challengeThresholdAmount) {
+      if (transactionRequestCommonBodyAmount < challengeThresholdAmount && transactionRequestType.value != REFUND.toString) {
         // For any connector != mapped we should probably assume that transaction_status_scheduler_delay will be > 0
         // so that getTransactionRequestStatusesImpl needs to be implemented for all connectors except mapped.
         // i.e. if we are certain that saveTransaction will be honored immediately by the backend, then transaction_status_scheduler_delay
         // can be empty in the props file. Otherwise, the status will be set to STATUS_PENDING
         // and getTransactionRequestStatusesImpl needs to be run periodically to update the transaction request status.
-        if (APIUtil.getPropsAsLongValue("transaction_status_scheduler_delay").isEmpty || (transactionRequestType.value == REFUND.toString))
+        if (APIUtil.getPropsAsLongValue("transaction_status_scheduler_delay").isEmpty)
           TransactionRequestStatus.COMPLETED
         else
           TransactionRequestStatus.PENDING
@@ -4084,12 +4084,12 @@ object LocalMappedConnector extends Connector with MdcLoggable {
                 }
               }
             }
-  
+
             for {
               //if challenge necessary, create a new one
               users <- getUsersForChallenges(fromAccount.bankId, fromAccount.accountId)
               //now we support multiple challenges. We can support multiple people to answer the challenges.
-              //So here we return the challengeIds. 
+              //So here we return the challengeIds.
               (challengeIds, callContext) <- Connector.connector.vend.createChallenges(
                 fromAccount.bankId,
                 fromAccount.accountId,
@@ -4104,7 +4104,9 @@ object LocalMappedConnector extends Connector with MdcLoggable {
               //TODO, this challengeIds are only for mapped connector now. we only return the first challengeId in the request yet.
               newChallenge = TransactionRequestChallenge(challengeIds.headOption.getOrElse(""), allowed_attempts = 3, challenge_type = challengeType.getOrElse(TransactionChallengeTypes.OTP_VIA_API.toString))
               _ <- Future(saveTransactionRequestChallenge(transactionRequest.id, newChallenge))
-              transactionRequest <- Future(transactionRequest.copy(challenge = newChallenge))
+              (newTransactionRequestStatus, callContext) <- NewStyle.function.notifyTransactionRequest(fromAccount, toAccount, transactionRequest, callContext)
+            _ <- Future(saveTransactionRequestStatusImpl(transactionRequest.id, newTransactionRequestStatus.toString).openOrThrowException(attemptedToOpenAnEmptyBox))
+            transactionRequest <- Future(transactionRequest.copy(challenge = newChallenge, status = newTransactionRequestStatus.toString))
             } yield {
               (transactionRequest, callContext)
             }
@@ -4329,6 +4331,42 @@ object LocalMappedConnector extends Connector with MdcLoggable {
               transactionRequestCommonBody = counterpartyBody,
               BigDecimal(counterpartyBody.value.amount),
               counterpartyBody.description,
+              TransactionRequestType(transactionRequestType),
+              transactionRequest.charge_policy,
+              callContext
+            )
+          } yield {
+            (transactionId, callContext)
+          }
+        case REFUND =>
+          for {
+            (fromAccount, toAccount, callContext) <- {
+              if (fromAccount.accountId.value == transactionRequest.from.account_id) {
+                val toCounterpartyIban = transactionRequest.other_account_routing_address
+                for {
+                  (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toCounterpartyIban, fromAccount.accountId, callContext)
+                  toAccount <- NewStyle.function.toBankAccount(toCounterparty, true, callContext)
+                } yield (fromAccount, toAccount, callContext)
+              } else {
+                val fromCounterpartyIban = transactionRequest.from.account_id
+                val toAccount = fromAccount
+                for {
+                  (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(fromCounterpartyIban, toAccount.accountId, callContext)
+                  fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, false, callContext)
+                } yield (fromAccount, toAccount, callContext)
+              }
+            }
+            refundBody = TransactionRequestBodyCommonJSON(
+              value = AmountOfMoneyJsonV121(transactionRequest.body.value.currency, transactionRequest.body.value.amount),
+              description = transactionRequest.body.description,
+            )
+            (transactionId, callContext) <- NewStyle.function.makePaymentv210(
+              fromAccount,
+              toAccount,
+              transactionRequest.id,
+              transactionRequestCommonBody = refundBody,
+              BigDecimal(refundBody.value.amount),
+              refundBody.description,
               TransactionRequestType(transactionRequestType),
               transactionRequest.charge_policy,
               callContext
