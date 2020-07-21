@@ -30,7 +30,7 @@ import code.api.v3_1_0.{CreateAccountRequestJsonV310, CustomerWithAttributesJson
 import com.openbankproject.commons.model.ListResult
 import code.api.v4_0_0.DynamicEndpointHelper.DynamicReq
 import code.api.v4_0_0.JSONFactory400.{createBankAccountJSON, createNewCoreBankAccountJson}
-import code.bankconnectors.Connector
+import code.bankconnectors.{Connector, LocalMappedConnector}
 import code.dynamicEntity.{DynamicEntityCommons, ReferenceType}
 import code.entitlement.Entitlement
 import code.metadata.counterparties.{Counterparties, MappedCounterparty}
@@ -1020,10 +1020,11 @@ trait APIMethods400 {
             // Check transReqId is valid
             (existingTransactionRequest, callContext) <- NewStyle.function.getTransactionRequestImpl(transReqId, cc.callContext)
 
-            // Check the Transaction Request is still INITIATED or NEXT_CHALLENGE_PENDING
-            _ <- Helper.booleanToFuture(TransactionRequestStatusNotInitiatedOrPending) {
+            // Check the Transaction Request is still INITIATED or NEXT_CHALLENGE_PENDING or FORWARDED
+            _ <- Helper.booleanToFuture(TransactionRequestStatusNotInitiatedOrPendingroForwarded) {
               existingTransactionRequest.status.equals(TransactionRequestStatus.INITIATED.toString) ||
-              existingTransactionRequest.status.equals(TransactionRequestStatus.NEXT_CHALLENGE_PENDING.toString)
+              existingTransactionRequest.status.equals(TransactionRequestStatus.NEXT_CHALLENGE_PENDING.toString) ||
+              existingTransactionRequest.status.equals(TransactionRequestStatus.FORWARDED.toString)
             }
 
             // Check the input transactionRequestType is the same as when the user created the TransactionRequest
@@ -1045,54 +1046,83 @@ trait APIMethods400 {
               ).exists(_ == existingTransactionRequest.challenge.challenge_type)
             }
 
-
-            // Check the challengeId is valid for this existingTransactionRequest
-            _ <- Helper.booleanToFuture(s"${InvalidTransactionRequestChallengeId}") {
-              if (APIUtil.isDataFromOBPSide("validateChallengeAnswer")) {
-                MappedExpectedChallengeAnswer
-                  .findAll(By(MappedExpectedChallengeAnswer.mTransactionRequestId, transReqId.value))
-                  .exists(_.challengeId == challengeAnswerJson.id)
-              }else{
-                existingTransactionRequest.challenge.id.equals(challengeAnswerJson.id)
-              }
-            }
-
-            (challengeAnswerIsValidated, callContext) <- NewStyle.function.validateChallengeAnswer(challengeAnswerJson.id, challengeAnswerJson.answer, callContext)
-
-            _ <- Helper.booleanToFuture(s"${InvalidChallengeAnswer} ") {
-              challengeAnswerIsValidated
-            }
-
-
-            //TODO, this is a temporary solution, we only checked single challenge Id for remote connectors. here is only for the localMapped Connector logic
-            _ <- if (APIUtil.isDataFromOBPSide("validateChallengeAnswer")){
-              for{
-                accountAttributes <- Connector.connector.vend.getAccountAttributesByAccount(bankId, accountId, None)
-                _ <- Helper.booleanToFuture(s"$NextChallengePending") {
-                  val quorum = accountAttributes._1.toList.flatten.find(_.name == "REQUIRED_CHALLENGE_ANSWERS").map(_.value).getOrElse("1").toInt
-                  MappedExpectedChallengeAnswer
-                    .findAll(By(MappedExpectedChallengeAnswer.mTransactionRequestId, transReqId.value))
-                    .count(_.successful == true) match {
-                    case number if number >= quorum => true
-                    case _ =>
-                      MappedTransactionRequestProvider.saveTransactionRequestStatusImpl(transReqId, TransactionRequestStatus.NEXT_CHALLENGE_PENDING.toString)
-                      false
+            (transactionRequest, callContext) <- challengeAnswerJson.answer match {
+              case "REJECT" =>
+                val transactionRequest = existingTransactionRequest.copy(status = TransactionRequestStatus.REJECTED.toString,
+                  body = existingTransactionRequest.body.copy(description =
+                    s"${existingTransactionRequest.body.description} - Refund reject reason code : ${challengeAnswerJson.reason_code.getOrElse("")} - Refund reject additional information : ${challengeAnswerJson.additional_information.getOrElse("")}"))
+                for {
+                  (fromAccount, toAccount, callContext) <- {
+                    if (fromAccount.accountId.value == transactionRequest.from.account_id) {
+                      val toCounterpartyIban = transactionRequest.other_account_routing_address
+                      for {
+                        (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toCounterpartyIban, fromAccount.accountId, callContext)
+                        toAccount <- NewStyle.function.toBankAccount(toCounterparty, true, callContext)
+                      } yield (fromAccount, toAccount, callContext)
+                    } else {
+                      val fromCounterpartyIban = transactionRequest.from.account_id
+                      val toAccount = fromAccount
+                      for {
+                        (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(fromCounterpartyIban, toAccount.accountId, callContext)
+                        fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, false, callContext)
+                      } yield (fromAccount, toAccount, callContext)
+                    }
                   }
-                }
-              } yield {
-                true
-              }
-            } else{
-            Future{true}
-          }
+                  _ <- NewStyle.function.notifyTransactionRequest(fromAccount, toAccount, transactionRequest, callContext)
+                  _ <- Future(LocalMappedConnector.saveTransactionRequestStatusImpl(transactionRequest.id, transactionRequest.status))
+                  _ <- Future(LocalMappedConnector.saveTransactionRequestDescriptionImpl(transactionRequest.id, transactionRequest.body.description))
+                } yield (transactionRequest, callContext)
+              case _ =>
+                for {
+                  // Check the challengeId is valid for this existingTransactionRequest
+                  _ <- Helper.booleanToFuture(s"${InvalidTransactionRequestChallengeId}") {
+                    if (APIUtil.isDataFromOBPSide("validateChallengeAnswer")) {
+                      MappedExpectedChallengeAnswer
+                        .findAll(By(MappedExpectedChallengeAnswer.mTransactionRequestId, transReqId.value))
+                        .exists(_.challengeId == challengeAnswerJson.id)
+                    }else{
+                      existingTransactionRequest.challenge.id.equals(challengeAnswerJson.id)
+                    }
+                  }
 
-          // All Good, proceed with the Transaction creation...
-          (transactionRequest, callContext) <- TransactionRequestTypes.withName(transactionRequestType.value) match {
-            case TRANSFER_TO_PHONE | TRANSFER_TO_ATM | TRANSFER_TO_ACCOUNT =>
-              NewStyle.function.createTransactionAfterChallengeV300(u, fromAccount, transReqId, transactionRequestType, callContext)
-            case _ =>
-              NewStyle.function.createTransactionAfterChallengeV210(fromAccount, existingTransactionRequest, callContext)
-          }
+                  (challengeAnswerIsValidated, callContext) <- NewStyle.function.validateChallengeAnswer(challengeAnswerJson.id, challengeAnswerJson.answer, callContext)
+
+                  _ <- Helper.booleanToFuture(s"${InvalidChallengeAnswer} ") {
+                    challengeAnswerIsValidated
+                  }
+
+
+                  //TODO, this is a temporary solution, we only checked single challenge Id for remote connectors. here is only for the localMapped Connector logic
+                  _ <- if (APIUtil.isDataFromOBPSide("validateChallengeAnswer")){
+                    for{
+                      accountAttributes <- Connector.connector.vend.getAccountAttributesByAccount(bankId, accountId, None)
+                      _ <- Helper.booleanToFuture(s"$NextChallengePending") {
+                        val quorum = accountAttributes._1.toList.flatten.find(_.name == "REQUIRED_CHALLENGE_ANSWERS").map(_.value).getOrElse("1").toInt
+                        MappedExpectedChallengeAnswer
+                          .findAll(By(MappedExpectedChallengeAnswer.mTransactionRequestId, transReqId.value))
+                          .count(_.successful == true) match {
+                          case number if number >= quorum => true
+                          case _ =>
+                            MappedTransactionRequestProvider.saveTransactionRequestStatusImpl(transReqId, TransactionRequestStatus.NEXT_CHALLENGE_PENDING.toString)
+                            false
+                        }
+                      }
+                    } yield {
+                      true
+                    }
+                  } else{
+                    Future{true}
+                  }
+
+                  // All Good, proceed with the Transaction creation...
+                  (transactionRequest, callContext) <- TransactionRequestTypes.withName(transactionRequestType.value) match {
+                    case TRANSFER_TO_PHONE | TRANSFER_TO_ATM | TRANSFER_TO_ACCOUNT =>
+                      NewStyle.function.createTransactionAfterChallengeV300(u, fromAccount, transReqId, transactionRequestType, callContext)
+                    case _ =>
+                      NewStyle.function.createTransactionAfterChallengeV210(fromAccount, existingTransactionRequest, callContext)
+                  }
+                } yield (transactionRequest, callContext)
+            }
           } yield {
 
             (JSONFactory210.createTransactionRequestWithChargeJSON(transactionRequest), HttpCode.`202`(callContext))
