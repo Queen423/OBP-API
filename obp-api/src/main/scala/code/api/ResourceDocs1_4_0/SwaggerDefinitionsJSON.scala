@@ -1157,7 +1157,9 @@ object SwaggerDefinitionsJSON {
   )
   val challengeAnswerJSON = ChallengeAnswerJSON(
     id = "This is challenge.id, you can get it from `Create Transaction Request.` response, only is useful if status ==`INITIATED` there.",
-    answer = "123"
+    answer = "123",
+    Some("[Optional] Reason code for REJECT answer (e.g. 'CUST')"),
+    Some("[Optional] Additional description for REJECT answer")
   )
 
   val postCustomerJson = PostCustomerJson(
