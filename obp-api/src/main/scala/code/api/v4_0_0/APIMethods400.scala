@@ -721,7 +721,7 @@ trait APIMethods400 {
                       val toIban = refundRequestTo.counterparty_iban.get
                       for {
                         (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toIban, fromAccount.accountId, cc.callContext)
-                        toAccount <- NewStyle.function.toBankAccount(toCounterparty, isOutgoingAccount = true, callContext)
+                        toAccount <- NewStyle.function.getBankAccountFromCounterparty(toCounterparty, isOutgoingAccount = true, callContext)
                         _ <- Helper.booleanToFuture(s"$CounterpartyBeneficiaryPermit") {
                           toCounterparty.isBeneficiary
                         }
@@ -733,7 +733,7 @@ trait APIMethods400 {
                       val toAccount = fromAccount
                       for {
                         (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(fromIban, toAccount.accountId, cc.callContext)
-                        fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, isOutgoingAccount = false, callContext)
+                        fromAccount <- NewStyle.function.getBankAccountFromCounterparty(fromCounterparty, isOutgoingAccount = false, callContext)
                         _ <- Helper.booleanToFuture(s"$CounterpartyBeneficiaryPermit") {
                           fromCounterparty.isBeneficiary
                         }
@@ -1057,14 +1057,14 @@ trait APIMethods400 {
                       val toCounterpartyIban = transactionRequest.other_account_routing_address
                       for {
                         (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toCounterpartyIban, fromAccount.accountId, callContext)
-                        toAccount <- NewStyle.function.toBankAccount(toCounterparty, true, callContext)
+                        toAccount <- NewStyle.function.getBankAccountFromCounterparty(toCounterparty, true, callContext)
                       } yield (fromAccount, toAccount, callContext)
                     } else {
                       val fromCounterpartyIban = transactionRequest.from.account_id
                       val toAccount = fromAccount
                       for {
                         (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(fromCounterpartyIban, toAccount.accountId, callContext)
-                        fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, false, callContext)
+                        fromAccount <- NewStyle.function.getBankAccountFromCounterparty(fromCounterparty, false, callContext)
                       } yield (fromAccount, toAccount, callContext)
                     }
                   }

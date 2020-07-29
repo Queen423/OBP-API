@@ -4349,14 +4349,14 @@ object LocalMappedConnector extends Connector with MdcLoggable {
                 val toCounterpartyIban = transactionRequest.other_account_routing_address
                 for {
                   (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(toCounterpartyIban, fromAccount.accountId, callContext)
-                  toAccount <- NewStyle.function.toBankAccount(toCounterparty, true, callContext)
+                  toAccount <- NewStyle.function.getBankAccountFromCounterparty(toCounterparty, true, callContext)
                 } yield (fromAccount, toAccount, callContext)
               } else {
                 val fromCounterpartyIban = transactionRequest.from.account_id
                 val toAccount = fromAccount
                 for {
                   (fromCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(fromCounterpartyIban, toAccount.accountId, callContext)
-                  fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, false, callContext)
+                  fromAccount <- NewStyle.function.getBankAccountFromCounterparty(fromCounterparty, false, callContext)
                 } yield (fromAccount, toAccount, callContext)
               }
             }

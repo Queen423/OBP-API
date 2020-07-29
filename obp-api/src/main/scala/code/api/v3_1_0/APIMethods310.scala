@@ -5709,7 +5709,7 @@ trait APIMethods310 {
                     "", "", isBeneficiary = true, List.empty, callContext
                   )
                 }
-                fromAccount <- NewStyle.function.toBankAccount(fromCounterparty, false, callContext)
+                fromAccount <- NewStyle.function.getBankAccountFromCounterparty(fromCounterparty, false, callContext)
               } yield (fromAccount, callContext)
             } else {
               throw new RuntimeException(s"$InvalidJsonFormat from object should only contain bank_id and account_id or counterparty_id in the post json body.")
@@ -5737,7 +5737,7 @@ trait APIMethods310 {
               for {
                 // TODO: Create the counterparty if it doesn't exist ?
                 (toCounterparty, callContext) <- NewStyle.function.getCounterpartyByIbanAndAccountId(iban = toAccountPost.counterparty_iban.get, fromAccount.accountId, callContext)
-                toAccount <- NewStyle.function.toBankAccount(toCounterparty, true, callContext)
+                toAccount <- NewStyle.function.getBankAccountFromCounterparty(toCounterparty, true, callContext)
               } yield (toAccount, callContext)
             } else {
               throw new RuntimeException(s"$InvalidJsonFormat to object should only contain bank_id and account_id or counterparty_id in the post json body.")
