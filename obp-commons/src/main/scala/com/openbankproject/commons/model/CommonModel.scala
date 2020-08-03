@@ -133,7 +133,27 @@ case class BankAccountCommons(
                                accountHolder :String,
                                override val attributes : Option[List[Attribute]] = None) extends BankAccount
 
-object BankAccountCommons extends Converter[BankAccount, BankAccountCommons]
+object BankAccountCommons extends Converter[BankAccount, BankAccountCommons] {
+  def apply(bankAccount: BankAccount) = new BankAccountCommons(
+    bankAccount.accountId,
+    bankAccount.accountType,
+    bankAccount.balance,
+    bankAccount.currency,
+    bankAccount.name,
+    bankAccount.label,
+    bankAccount.iban,
+    bankAccount.number,
+    bankAccount.bankId,
+    bankAccount.lastUpdate,
+    bankAccount.branchId,
+    bankAccount.accountRoutingScheme,
+    bankAccount.accountRoutingAddress,
+    bankAccount.accountRoutings,
+    bankAccount.accountRules,
+    bankAccount.accountHolder,
+    bankAccount.queryTags
+  )
+}
 
 case class ProductCollectionItemCommons(
                                          collectionCode :String,
@@ -364,7 +384,13 @@ case class TransactionRequestCommonBodyJSONCommons(
                         value : AmountOfMoneyJsonV121,
                         description: String) extends TransactionRequestCommonBodyJSON
 
-object TransactionRequestCommonBodyJSONCommons extends Converter[TransactionRequestCommonBodyJSON, TransactionRequestCommonBodyJSONCommons]
+object TransactionRequestCommonBodyJSONCommons extends Converter[TransactionRequestCommonBodyJSON, TransactionRequestCommonBodyJSONCommons] {
+  def apply(transactionRequestCommonBodyJSON: TransactionRequestCommonBodyJSON): TransactionRequestCommonBodyJSONCommons =
+    new TransactionRequestCommonBodyJSONCommons(
+      transactionRequestCommonBodyJSON.value,
+      transactionRequestCommonBodyJSON.description
+    )
+}
 
 case class TransactionRequestStatusCommons(
                                             transactionRequestId: String,
