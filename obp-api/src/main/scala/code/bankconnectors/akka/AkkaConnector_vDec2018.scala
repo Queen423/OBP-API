@@ -1525,13 +1525,10 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
       currency=currencyExample.value,
       name=bankAccountNameExample.value,
       label=labelExample.value,
-      iban=Some(ibanExample.value),
       number=bankAccountNumberExample.value,
       bankId=BankId(bankIdExample.value),
       lastUpdate=parseDate(bankAccountLastUpdateExample.value).getOrElse(sys.error("bankAccountLastUpdateExample.value is not validate date format.")),
       branchId=branchIdExample.value,
-      accountRoutingScheme=accountRoutingSchemeExample.value,
-      accountRoutingAddress=accountRoutingAddressExample.value,
       accountRoutings=List( AccountRouting(scheme=accountRoutingSchemeExample.value,
       address=accountRoutingAddressExample.value)),
       accountRules=List( AccountRule(scheme=accountRuleSchemeExample.value,
@@ -1543,13 +1540,10 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
       currency=currencyExample.value,
       name=bankAccountNameExample.value,
       label=labelExample.value,
-      iban=Some(ibanExample.value),
       number=bankAccountNumberExample.value,
       bankId=BankId(bankIdExample.value),
       lastUpdate=parseDate(bankAccountLastUpdateExample.value).getOrElse(sys.error("bankAccountLastUpdateExample.value is not validate date format.")),
       branchId=branchIdExample.value,
-      accountRoutingScheme=accountRoutingSchemeExample.value,
-      accountRoutingAddress=accountRoutingAddressExample.value,
       accountRoutings=List( AccountRouting(scheme=accountRoutingSchemeExample.value,
       address=accountRoutingAddressExample.value)),
       accountRules=List( AccountRule(scheme=accountRuleSchemeExample.value,
@@ -1667,13 +1661,10 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
         currency = currencyExample.value,
         name = bankAccountNameExample.value,
         label = labelExample.value,
-        iban = Some(ibanExample.value),
         number = bankAccountNumberExample.value,
         bankId = BankId(bankIdExample.value),
         lastUpdate = parseDate(bankAccountLastUpdateExample.value).getOrElse(sys.error("bankAccountLastUpdateExample.value is not validate date format.")),
         branchId = branchIdExample.value,
-        accountRoutingScheme = accountRoutingSchemeExample.value,
-        accountRoutingAddress = accountRoutingAddressExample.value,
         accountRoutings = List(AccountRouting(scheme = accountRoutingSchemeExample.value,
           address = accountRoutingAddressExample.value)),
         accountRules = List(AccountRule(scheme = accountRuleSchemeExample.value,
@@ -1685,13 +1676,10 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
         currency = currencyExample.value,
         name = bankAccountNameExample.value,
         label = labelExample.value,
-        iban = Some(ibanExample.value),
         number = bankAccountNumberExample.value,
         bankId = BankId(bankIdExample.value),
         lastUpdate = parseDate(bankAccountLastUpdateExample.value).getOrElse(sys.error("bankAccountLastUpdateExample.value is not validate date format.")),
         branchId = branchIdExample.value,
-        accountRoutingScheme = accountRoutingSchemeExample.value,
-        accountRoutingAddress = accountRoutingAddressExample.value,
         accountRoutings = List(AccountRouting(scheme = accountRoutingSchemeExample.value,
           address = accountRoutingAddressExample.value)),
         accountRules = List(AccountRule(scheme = accountRuleSchemeExample.value,
@@ -1774,7 +1762,7 @@ object AkkaConnector_vDec2018 extends Connector with AkkaConnectorActorInit {
 
   override def notifyTransactionRequest(fromAccount: BankAccount, toAccount: BankAccount, transactionRequest: TransactionRequest, callContext: Option[CallContext]): OBPReturnType[Box[TransactionRequestStatus.Value]] = {
     import com.openbankproject.commons.dto.{OutBoundNotifyTransactionRequest => OutBound, InBoundNotifyTransactionRequest => InBound}
-    val req = OutBound(callContext.map(_.toOutboundAdapterCallContext).orNull, fromAccount, toAccount, transactionRequest)
+    val req = OutBound(callContext.map(_.toOutboundAdapterCallContext).orNull, BankAccountCommons(fromAccount), BankAccountCommons(toAccount), transactionRequest)
     val response: Future[Box[InBound]] = (southSideActor ? req).mapTo[InBound].recoverWith(recoverFunction).map(Box !! _)
     response.map(convertToTuple[TransactionRequestStatus.Value](callContext))
   }

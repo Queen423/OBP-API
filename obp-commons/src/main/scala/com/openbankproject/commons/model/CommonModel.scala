@@ -141,17 +141,14 @@ object BankAccountCommons extends Converter[BankAccount, BankAccountCommons] {
     bankAccount.currency,
     bankAccount.name,
     bankAccount.label,
-    bankAccount.iban,
     bankAccount.number,
     bankAccount.bankId,
     bankAccount.lastUpdate,
     bankAccount.branchId,
-    bankAccount.accountRoutingScheme,
-    bankAccount.accountRoutingAddress,
     bankAccount.accountRoutings,
     bankAccount.accountRules,
     bankAccount.accountHolder,
-    bankAccount.queryTags
+    bankAccount.attributes
   )
 }
 

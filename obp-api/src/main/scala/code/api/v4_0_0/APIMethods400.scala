@@ -1021,7 +1021,7 @@ trait APIMethods400 {
             (existingTransactionRequest, callContext) <- NewStyle.function.getTransactionRequestImpl(transReqId, cc.callContext)
 
             // Check the Transaction Request is still INITIATED or NEXT_CHALLENGE_PENDING or FORWARDED
-            _ <- Helper.booleanToFuture(TransactionRequestStatusNotInitiatedOrPendingroForwarded) {
+            _ <- Helper.booleanToFuture(TransactionRequestStatusNotInitiatedOrPendingOrForwarded) {
               existingTransactionRequest.status.equals(TransactionRequestStatus.INITIATED.toString) ||
               existingTransactionRequest.status.equals(TransactionRequestStatus.NEXT_CHALLENGE_PENDING.toString) ||
               existingTransactionRequest.status.equals(TransactionRequestStatus.FORWARDED.toString)
