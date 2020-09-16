@@ -5699,6 +5699,7 @@ trait APIMethods310 {
                   case _ => NewStyle.function.createCounterparty(
                     name = fromAccountPost.counterparty_name.getOrElse(""),
                     description = "Counterparty added automatically",
+                    currency = "EUR",
                     createdByUserId = callContext.map(_.userId).getOrElse(""),
                     thisBankId = toAccount.bankId.value,
                     thisAccountId = toAccount.accountId.value,
